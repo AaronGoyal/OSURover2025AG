@@ -7,9 +7,7 @@
 #include <opencv2/opencv.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <rclcpp/qos.hpp>
-#include <gst/gst.h>
-#include <gst/app/gstappsink.h>
-#include "std_msgs/msg/byte_multi_array.hpp"
+
 using std::placeholders::_1;
 
 // Useful info
@@ -21,49 +19,47 @@ class RoverCamera : public rclcpp::Node{
 
 public:
     RoverCamera() : Node("camera") {
-        gst_init(nullptr, nullptr);
-	auto qos_profile = rclcpp::QoS(rclcpp::KeepLast(30))
+
+	auto qos_profile = rclcpp::QoS(rclcpp::KeepLast(1))
                              .best_effort()  // Ensures message delivery
-                             .durability_volatile(); // Messages are not stored for late subscribers
-                             //.get_rmw_qos_profile();
+                             .durability_volatile() // Messages are not stored for late subscribers
+                             .get_rmw_qos_profile();
 
         is_rtsp_camera = this->declare_parameter("is_rtsp_camera", false);
         capture_device_path = this->declare_parameter("device_path", std::string("/dev/video0"));
-        fps = this->declare_parameter("fps", 30);
+        fps = this->declare_parameter("fps", 20);
 
         upside_down = this->declare_parameter("upside_down", false);
 
-        large_image_width = this->declare_parameter("large_image_width", 800);
-        large_image_height = this->declare_parameter("large_image_height", 600);
+        large_image_width = this->declare_parameter("large_image_width", 640);
+        large_image_height = this->declare_parameter("large_image_height", 360);
         small_image_width = this->declare_parameter("small_image_width", 256);
         small_image_height = this->declare_parameter("small_image_height", 144);
 
         base_topic = this->declare_parameter("base_topic", "cameras/main_navigation");
 
-        broadcast_large_image = true;
-        broadcast_small_image = false;
-        
+        broadcast_large_image = false;
+        broadcast_small_image = true;
+
         if (is_rtsp_camera) {
             cap = new cv::VideoCapture(capture_device_path, cv::CAP_FFMPEG);
             RCLCPP_INFO_STREAM(this->get_logger(), "Connecting to RTSP camera with path: " << capture_device_path);
         } else {
-            RCLCPP_INFO_STREAM(this->get_logger(), "Attempting to open pipeline");
-            pipeline_str = "v4l2src device={device_path} ! "
-                "videorate ! video/x-raw,framerate=30/1,width=800,height=600 ! "
-                "nvvidconv ! nvv4l2h265enc ! h265parse ! "
-                "appsink name=sink sync=false";
-            size_t pos = pipeline_str.find("{device_path}");
-            pipeline_str.replace(pos, std::string("{device_path}").length(), capture_device_path);
+            cap = new cv::VideoCapture(capture_device_path, cv::CAP_V4L2);
             RCLCPP_INFO_STREAM(this->get_logger(), "Connecting to USB camera with path: " << capture_device_path);
 
+            cap->set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+            cap->set(cv::CAP_PROP_FRAME_WIDTH, large_image_width);
+            cap->set(cv::CAP_PROP_FRAME_HEIGHT, large_image_height);
+            cap->set(cv::CAP_PROP_FPS, fps);
         }
 
         large_image_node_name = base_topic + "/image_" + std::to_string(large_image_width) + "x" + std::to_string(large_image_height);
         small_image_node_name = base_topic + "/image_" + std::to_string(small_image_width) + "x" + std::to_string(small_image_height);
 
         //rclcpp::Node::SharedPtr node_handle_ = std::shared_ptr<RoverCamera>(this);
-        large_image_publisher = this->create_publisher<std_msgs::msg::ByteMultiArray>(large_image_node_name, qos_profile);
-        small_image_publisher = this->create_publisher<std_msgs::msg::ByteMultiArray>(small_image_node_name, qos_profile);
+        large_image_publisher = image_transport::create_publisher(this, large_image_node_name, qos_profile);
+        small_image_publisher = image_transport::create_publisher(this, small_image_node_name, qos_profile);
 
         //large_image_publisher = large_image_transport->advertise(large_image_node_name, 1);
         //small_image_publisher = small_image_transport->advertise(small_image_node_name, 1);
@@ -76,64 +72,48 @@ public:
         } else {
             period = 1000/(fps + 2);
         }
-        error = nullptr;
-        pipeline = gst_parse_launch(pipeline_str.c_str(), &error);
 
-        if(!pipeline) {
+        image_black = cv::Mat(large_image_height, large_image_width, CV_8UC3, cv::Scalar(0, 0, 0));
+
+        if(!cap->isOpened()) {
             RCLCPP_INFO_STREAM(this->get_logger(), "Failed to open capture for " << capture_device_path);
-            g_clear_error(&error);
-            return;
-        }
-        
-        // Get appsink element
-        appsink = gst_bin_get_by_name(GST_BIN(pipeline), "sink");
-        if (!appsink) {
-            RCLCPP_INFO_STREAM(this->get_logger(), "Failed to get appsink");	
-            gst_object_unref(pipeline);
             return;
         }
 
-        g_object_set(G_OBJECT(appsink), "max-buffers", 1, "drop", TRUE, NULL);
-
-        // Set pipeline state to playing
-        ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);
-        if (ret == GST_STATE_CHANGE_FAILURE) {
-            RCLCPP_INFO_STREAM(this->get_logger(), "Failed to set pipeline after getting state for " << capture_device_path);
-            gst_object_unref(appsink);
-            gst_object_unref(pipeline);
-            return;
-        }
         timer = this->create_wall_timer(std::chrono::milliseconds(period), std::bind(&RoverCamera::run, this));
     }
 
     void run(){
-        GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(appsink));
-        if (!sample) {
-	    RCLCPP_INFO_STREAM(this->get_logger(), "Failed to get sample");
-            return;
-        }
-        // Get buffer from sample
-        GstBuffer *buffer = gst_sample_get_buffer(sample);
-        if (!buffer) {
-            RCLCPP_INFO_STREAM(this->get_logger(), "Failed to get buffer");
-            gst_sample_unref(sample);
-            return;
-        }
-        // Map buffer
-        GstMapInfo map;
-        if (gst_buffer_map(buffer, &map, GST_MAP_READ)) {
-            // Print first 50 bytes of data
-            large_image_message.data.resize(map.size);
-            std::memcpy(large_image_message.data.data(), map.data, map.size);
-            large_image_publisher -> publish(large_image_message);
-            RCLCPP_INFO_STREAM(this->get_logger(), "image published"); 
-            // Print buffer size
-            // Unmap buffer
-            gst_buffer_unmap(buffer, &map);
+        if(!is_rtsp_camera) {
+            cap->read(image_large);
+        }else{
+            cap->read(image_rtsp_raw);
+            image_black.copyTo(image_large);
+
+            float image_scalar = float(image_large.rows) / image_rtsp_raw.rows;
+
+            cv::resize(image_rtsp_raw, image_rtsp_scaled, cv::Size(int(image_rtsp_raw.cols * image_scalar), int(image_rtsp_raw.rows * image_scalar)));
+
+            int x = (image_large.cols - image_rtsp_scaled.cols) / 2;
+
+            image_rtsp_scaled.copyTo(image_large(cv::Rect(x , 0, image_rtsp_scaled.cols, image_rtsp_scaled.rows)));
         }
 
-        // Clean up sample
-        gst_sample_unref(sample);
+        if(!image_large.empty()){
+            if(upside_down){
+                cv::flip(image_large, image_large, -1);
+            }
+
+            //RCLCPP_INFO_STREAM(this->get_logger(), "Broadcasts large: " << broadcast_large_image << " - Broadcast small: " << broadcast_small_image);
+            if(broadcast_large_image){
+                large_image_message = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", image_large).toImageMsg();
+                large_image_publisher.publish(large_image_message);
+            }else if(broadcast_small_image){
+                cv::resize(image_large, image_small, cv::Size(small_image_width, small_image_height));
+                small_image_message = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", image_small).toImageMsg();
+                small_image_publisher.publish(small_image_message);
+            }
+        }
     }
 
     void control_callback(const rover_camera_interface::msg::CameraControlMessage::SharedPtr msg) {
@@ -141,12 +121,13 @@ public:
         broadcast_large_image = msg->enable_large_broadcast;
     }
 
-private:
-    GstStateChangeReturn ret;
-    GstElement *appsink;
-    GError *error;
-    GstElement *pipeline;
+    ~RoverCamera(){
+        if(cap->isOpened()){
+            cap->release();
+        }
+    }
 
+private:
     cv::VideoCapture *cap;
 
     bool is_rtsp_camera;
@@ -168,13 +149,14 @@ private:
 
     std::string base_topic;
 
-    std::string pipeline_str;
-
     std::string large_image_node_name;
     std::string small_image_node_name;
 
-    rclcpp::Publisher<std_msgs::msg::ByteMultiArray>::SharedPtr large_image_publisher;
-    rclcpp::Publisher<std_msgs::msg::ByteMultiArray>::SharedPtr small_image_publisher;
+    image_transport::ImageTransport *large_image_transport;
+    image_transport::ImageTransport *small_image_transport;
+
+    image_transport::Publisher large_image_publisher;
+    image_transport::Publisher small_image_publisher;
 
     rclcpp::Subscription<rover_camera_interface::msg::CameraControlMessage>::SharedPtr control_subscriber;
 
@@ -185,8 +167,8 @@ private:
     cv::Mat image_large;
     cv::Mat image_small;
 
-    std_msgs::msg::ByteMultiArray large_image_message;
-    std_msgs::msg::ByteMultiArray small_image_message;
+    sensor_msgs::msg::Image::SharedPtr large_image_message;
+    sensor_msgs::msg::Image::SharedPtr small_image_message;
 
 };
 

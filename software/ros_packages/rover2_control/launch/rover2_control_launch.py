@@ -28,7 +28,7 @@ def generate_launch_description():
                 '~drive_control_topic': 'drive_control/rear',
                 '~drive_control_status_topic': 'drive_status/rear',
                 '~first_motor_id': 2,
-                '~second_motor_id': 1,
+                '~second_motor_id': 3,
                 '~invert_second_motor': True
             }],
             **config
@@ -83,10 +83,10 @@ def generate_launch_description():
             name='effectors',
             **config
         ),
-        Node(
-            package='rover2_control',
-            executable='auton_controller',
-            name='auton_controller',
-            **config
-        )
+        #Node(
+        #    package='rover2_control',
+        #    executable='auton_controller',
+        #    name='auton_controller',
+        #    **config
+        #)
     ])

@@ -27,8 +27,8 @@ def generate_launch_description():
                 '~port': '/dev/rover/ttyREAR',
                 '~drive_control_topic': 'drive_control/rear',
                 '~drive_control_status_topic': 'drive_status/rear',
-                '~first_motor_id': 2,
-                '~second_motor_id': 1,
+                '~first_motor_id': 3,
+                '~second_motor_id': 2,
                 '~invert_second_motor': True
             }],
             **config

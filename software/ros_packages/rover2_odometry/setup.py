@@ -23,7 +23,8 @@ setup(
     entry_points={
         'console_scripts': [
  #           'odometry = rover2_odometry.gps:main',
-            'imu = rover2_odometry.imu:main'
+            'imu = rover2_odometry.imu:main',
+            'simple_position = rover2_odometry.simple_position:main'
         ],
     },
 )

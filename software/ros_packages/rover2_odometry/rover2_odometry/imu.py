@@ -9,6 +9,7 @@ import busio
 import adafruit_bno055
 import math
 from sensor_msgs.msg import Imu
+from geometry_msgs.msg import Vector3
 from std_msgs.msg import Float32
 import rclpy
 from rclpy.node import Node
@@ -50,7 +51,7 @@ class Odometry(Node):
         self.imu_heading_topic = self.declare_parameter("~imu_heading_topic", IMU_HEADING_TOPIC).value
         self.wait_time = 1.0 / self.declare_parameter('~hertz', DEFAULT_HERTZ).value
 
-        self.imu_data_publisher = self.create_publisher(Imu, self.imu_data_topic, 1)
+        self.imu_data_publisher = self.create_publisher(Vector3, self.imu_data_topic, 1)
         self.imu_heading_publisher = self.create_publisher(Float32, self.imu_heading_topic,1)
         print(self.wait_time)
         self.timer = self.create_timer(self.wait_time, self.main_loop)
@@ -75,7 +76,8 @@ class Odometry(Node):
         self.write_calibration_offsets()
 
 #        self.imu.mode = Mode.NDOF_FMC_OFF_MODE
-        self.imu.mode = Mode.NDOF_MODE
+#        self.imu.mode = Mode.NDOF_MODE
+        self.imu.mode = Mode.MAGONLY_MODE
     def write_offset(self,register, value):
         # Convert value to little-endian format
         value_bytes = value.to_bytes(2, 'little', signed=True)
@@ -149,6 +151,11 @@ class Odometry(Node):
 
     def broadcast_imu(self):
         #self.quat_to_euler()
+        message = Vector3()
+        message.x = self.imu.magnetic[0]
+        message.y = self.imu.magnetic[1]
+        message.z = self.imu.magnetic[2]
+        self.imu_data_publisher.publish(message)
         """
         message = Imu()
         message.header.frame_id = "imu"
@@ -168,12 +175,14 @@ class Odometry(Node):
         message.linear_acceleration.z = self.imu.acceleration[2]
         self.imu_data_publisher.publish(message)
         """
+        """
         heading_message = Float32()
         offset_heading = self.imu.euler[0] # - self.initial_offset
 #        if(offset_heading > 180):
 #            offset_heading-=360
         heading_message.data = offset_heading
         self.imu_heading_publisher.publish(heading_message)
+        """
 def main(args=None):
         rclpy.init(args=args)
         odometry = Odometry()

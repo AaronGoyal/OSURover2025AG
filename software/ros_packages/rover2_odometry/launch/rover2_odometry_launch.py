@@ -15,6 +15,12 @@ def generate_launch_description():
             name='imu',
             **config
         ),
+        Node(
+            package='rover2_odometry',
+            executable='simple_position',
+            name='simple_position',
+            **config
+        ),
 #        Node(
 #            package='rover2_odometry',
 #            executable='odometry',

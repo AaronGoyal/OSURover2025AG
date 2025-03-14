@@ -16,7 +16,7 @@ def generate_launch_description():
             executable='rover_camera',
             name='navigation',
             parameters=[{
-                'device_path': '/dev/rover/camera_main_navigation',
+                'device_path': '/dev/video12',
                 'base_topic': 'cameras/main_navigation',
                 'fps': 10
             }],
@@ -29,7 +29,7 @@ def generate_launch_description():
             name='chassis',
             #prefix=["sudo taskset -c 4"],
             parameters=[{
-                'device_path': '/dev/rover/camera_chassis',
+                'device_path': '/dev/video11',
                 'base_topic': 'cameras/chassis'
             }],
             **config
@@ -40,7 +40,7 @@ def generate_launch_description():
             name='infrared',
             #prefix=["sudo taskset -c 5"],
             parameters=[{
-                'device_path': '/dev/rover/camera_infrared',
+                'device_path': '/dev/video10',
                 'base_topic': 'cameras/infrared'
             }],
             **config
@@ -52,7 +52,7 @@ def generate_launch_description():
             #prefix=["sudo taskset -c 6"],
             parameters=[{
                 'is_rtsp_camera': True,
-                'device_path': 'rtsp://192.168.1.11:554',
+                'device_path': '/dev/video13',
                 'base_topic': 'cameras/gripper'
             }],
             **config

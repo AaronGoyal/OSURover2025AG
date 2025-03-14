@@ -38,8 +38,8 @@ public:
 
         base_topic = this->declare_parameter("base_topic", "cameras/main_navigation");
 
-        broadcast_large_image = false;
-        broadcast_small_image = true;
+        broadcast_large_image = true;
+        broadcast_small_image = false;
 
         if (is_rtsp_camera) {
             cap = new cv::VideoCapture(capture_device_path, cv::CAP_FFMPEG);

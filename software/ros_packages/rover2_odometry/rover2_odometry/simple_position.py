@@ -39,7 +39,7 @@ class SimplePosition(Node):
             return
         if self.latest_gps_latitude == None:
             return 
-        self.get_logger().info("GPS midpoint loop!")
+        #self.get_logger().info("GPS midpoint loop!")
         mid_lat, mid_lon = self.midpoint(self.latest_gps_latitude, self.latest_gps_longitude, self.current_latitude, self.current_longitude)
         self.current_latitude = mid_lat
         self.current_longitude = mid_lon
@@ -47,20 +47,20 @@ class SimplePosition(Node):
     def publish_loop(self):
         # calculate new position
         if self.current_latitude == None:
-            self.get_logger().info("Position not set")
+            #self.get_logger().info("Position not set")
             return
         if self.current_heading == None:
-            self.get_logger().info("Heading not set")
+            #self.get_logger().info("Heading not set")
             return
         distance_covered = 0.1 * self.current_speed
         geod = Geodesic.WGS84
 
-        self.get_logger().info(f"Current speed: {self.current_speed}. Current heading: {self.current_heading}")
+        #self.get_logger().info(f"Current speed: {self.current_speed}. Current heading: {self.current_heading}")
         new_pos = geod.Direct(self.current_latitude, self.current_longitude, self.current_heading, distance_covered)
         self.current_latitude = new_pos['lat2']
         self.current_longitude = new_pos['lon2']
 
-        self.get_logger().info(f'Distance covered: {distance_covered}. New lat: {self.current_latitude}, new lon: {self.current_longitude}')
+        #self.get_logger().info(f'Distance covered: {distance_covered}. New lat: {self.current_latitude}, new lon: {self.current_longitude}')
         ros_msg = String()
         ros_msg.data = str(self.current_latitude) + ";" + str(self.current_longitude)
         self.publisher.publish(ros_msg)

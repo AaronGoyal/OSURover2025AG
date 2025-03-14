@@ -6,6 +6,7 @@ from rover2_control_interface.msg import DriveCommandMessage
 from rover2_control_interface.msg import GPSStatusMessage
 from rover2_control import aruco_scan
 from rover2_control import geographic_functions
+from rover2_control import bottle_detect
 from rover2_status_interface.msg import LED
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float32
@@ -17,6 +18,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import json
 from dataclasses import asdict
+import bottle_detect
 
 @dataclass
 class Location:
@@ -32,23 +34,24 @@ class auton_controller(Node):
     target_heading = None
     state = "stopped"
     control_timer = None 
-    aruco_turn_timer = None
+    vel_control_loop_timer = None
     offset = None
     time_driving = 0.0
-    time_looking_for_aruco = 0.0
+    time_looking_for_item = None
+    item_searching_for = None
     target_turning_velocity = 0.0
     curr_turning_velocity = 0.0
     pause_time = None
     led_state = "green"
     led_timer = None
     latest_img_frame = None
+    bottle_detector = None
 
-    # 30%: 117.5" in 5 sec
-    # 20%: 
 
     def __init__(self):
         super().__init__('auton_controller')
         self.bridge = CvBridge()
+        self.bottle_detector = bottle_detect.bottle_detector()
         self.control_subscription = self.create_subscription( String, 'autonomous/auton_control', self.control_listener_callback, 10)
         self.gps_subscription = self.create_subscription(GPSStatusMessage, 'tower/status/gps', self.gps_listener_callback, 10)
         #self.imu_subscription = self.create_subscription(Imu, 'imu/data', self.imu_listener_callback, 10)
@@ -66,23 +69,17 @@ class auton_controller(Node):
             self.publish_drive_message(0.0, 0.0)
             self.control_timer.cancel()
             self.control_timer = None
-            if self.aruco_turn_timer is not None:
-                self.aruco_turn_timer.cancel()
-                self.aruco_turn_timer = None
+            if self.vel_control_loop_timer is not None:
+                self.vel_control_loop_timer.cancel()
+                self.vel_control_loop_timer = None
             self.subpoints = None
             self.curr_destination = None
             self.waypoint_destination = None
             self.target_heading = None
-            self.time_looking_for_aruco = None
+            self.time_looking_for_item = None
+            self.pause_time = None
             self.publish_log_msg("Stopped autonomous control")
             return
-
-        # self.publish_drive_message(0.2,0.0)
-        # self.time_driving += 0.1
-        # print("Time driving: " + str(self.time_driving))
-        # if self.time_driving >= 5.0:
-        #     self.state = "stopped"
-        # return
 
         if self.state == "turning":
             if self.curr_destination is None:
@@ -134,93 +131,106 @@ class auton_controller(Node):
         
         elif self.state == "scanning":
             # turn until an aruco tag is found
-            if self.aruco_turn_timer is None:
-                self.aruco_turn_timer = self.create_timer(0.1, self.vel_control_loop)
-
-            if self.pause_time is not None:
-                if self.pause < 1.0:
-                    self.pause_time += 0.1
-                    return
-                else:
-                    self.pause_time = None
+            if self.vel_control_loop_timer is None:
+                self.vel_control_loop_timer = self.create_timer(0.1, self.vel_control_loop)
 
             if self.latest_img_frame is None:
                 self.get_logger().info("No images from camera feed yet")
                 return
 
-            if self.time_looking_for_aruco is None:
-                self.time_looking_for_aruco = 0.0
-            if self.time_looking_for_aruco >= 10.0:
-                self.get_logger().info(f"Timed out looking for an ARUCO tag")
+            if self.time_looking_for_item is None:
+                self.time_looking_for_item = 0.0
+            if self.time_looking_for_item >= 10.0:
+                self.get_logger().info(f"Timed out looking for a(n) {self.item_searching_for}")
                 self.state = "stopped"
                 return
             
-            aruco_location_in_img, width = aruco_scan.detect_first_aruco_marker(self, self.latest_img_frame)
-            if aruco_location_in_img == None:
+            item_location_in_img = None
+            width = None
+            if self.item_searching_for == "ARUCO":
+                item_location_in_img, width = aruco_scan.detect_first_aruco_marker(self, self.latest_img_frame)
+            elif self.item_searching_for == "bottle":
+                item_location_in_img, width = self.bottle_detector.get_bottle(self.latest_img_frame)
 
-                self.time_looking_for_aruco += 0.1
-                self.get_logger().info(f"Looking for ARUCO for {self.time_looking_for_aruco:.2f} seconds")
+            if item_location_in_img == None:
+                self.time_looking_for_item += 0.1
+                self.get_logger().info(f"Looking for {self.item_searching_for} for {self.time_looking_for_item:.2f} seconds")
                 self.target_turning_velocity = 0.3
-            else:
-                self.time_looking_for_aruco = 0.0
-                angular_vel = 0.25
-                if abs(aruco_location_in_img - 0.5) < 0.2:
-                    angular_vel = 0.25 # slow down on approach
+                return
+            
+            self.time_looking_for_item = 0.0
+            angular_vel = 0.3
+            if abs(item_location_in_img - 0.5) < 0.2:
+                angular_vel = 0.25 # slow down on approach
 
-                if aruco_location_in_img > 0.4 and aruco_location_in_img < 0.6:
-                    #self.get_logger().info(f"Pointed towards ARUCO, should now drive forward")
-                    self.curr_turning_velocity = 0.0
-                    angular_vel = 0.0
-                    self.state = "driving to aruco"
-                    self.get_logger().info("Now driving to ARUCO")
-                    self.aruco_turn_timer.cancel()
-                    self.aruco_turn_timer = None
-                elif aruco_location_in_img <= 0.4:
-                    #self.get_logger().info(f"ARUCO is to the left, turning left")
-                    hi = 4
+            if item_location_in_img > 0.4 and item_location_in_img < 0.6:
+                #self.get_logger().info(f"Pointed towards ARUCO, should now drive forward")
+                self.curr_turning_velocity = 0.0
+                angular_vel = 0.0
+                if self.pause_time is not None:
+                    if self.pause_time >= 1.0:
+                        self.state = "driving to item"
+                        self.get_logger().info(f"Now driving to {self.item_searching_for}")
+                        self.vel_control_loop_timer.cancel()
+                        self.vel_control_loop_timer = None
+                        self.time_looking_for_item = None
+                    else:
+                        self.pause_time += 0.1
                 else:
-                    #self.get_logger().info(f"ARUCO is to the right, turning right")
-                    angular_vel *= -1
-                
-                msg = f"ARUCO is at: {aruco_location_in_img:.2f}. Width: {width:0.2f}. Target Angular: {angular_vel:.2f}"
-                self.get_logger().info(msg + f" Curr angular: {self.curr_turning_velocity:.2f}")
-                #self.target_turning_velocity = angular_vel
+                    self.pause_time = 0.0
+            elif item_location_in_img <= 0.4:
+                #self.get_logger().info(f"ARUCO is to the left, turning left")
+                angular_vel *= 1 # not necessary but helps understand the code
+            else:
+                #self.get_logger().info(f"ARUCO is to the right, turning right")
+                angular_vel *= -1
+            
+            msg = f"{self.item_searching_for} is at: {item_location_in_img:.2f}. Width: {width:0.2f}. Target Angular: {angular_vel:.2f}"
+            self.get_logger().info(msg + f" Curr angular: {self.curr_turning_velocity:.2f}")
+            #self.target_turning_velocity = angular_vel
 
-        elif self.state == "driving to aruco":
+        elif self.state == "driving to item":
             linear_vel = 0.3
             angular = 0.0
-            aruco_location_in_img, width = aruco_scan.detect_first_aruco_marker(self, self.latest_img_frame)
-            if aruco_location_in_img == None:
-                self.get_logger().info(f"Lost the aruco")
+            item_location_in_img, width = None
+            if self.item_searching_for == "ARUCO":
+                item_location_in_img, width = aruco_scan.detect_first_aruco_marker(self, self.latest_img_frame)
+            elif self.item_searching_for == "bottle":
+                item_location_in_img, width = self.bottle_detector.get_bottle(self.latest_img_frame)
+
+            if item_location_in_img == None:
+                self.get_logger().info(f"Lost the {self.item_searching_for}")
                 self.state == "scanning"
                 return
             
-            if width > 0.16:
+            width_threshold = 0.16
+            if self.item_searching_for == "bottle":
+                width_threshold = 0.12
+            if width > width_threshold:
                 self.get_logger().info(f"Arrived")
                 self.led_timer = self.create_timer(0.6, self.blinking_led_loop)
                 self.publish_led_message(0,255,0)
                 self.state = "stopped"
                 return
 
-            if aruco_location_in_img > 0.45 and aruco_location_in_img < 0.55:
+            if item_location_in_img > 0.45 and item_location_in_img < 0.55:
                 #self.get_logger().inscp ~/Documents/GitHub/Rover-Unity/ros2_ws/src/py_pubsub/py_pubsub/auton_controller.py makemorerobot@192.168.1.101:~/Rover_2023_2024/software/ros_packages/rover2_control/rover2_control/auton_controller.pyfo(f"On track towards ARUCO")
                 hi = 4
-            elif aruco_location_in_img <= 0.25:
+            elif item_location_in_img <= 0.25:
                 angular = 0.35
-            elif aruco_location_in_img <= 0.45:
+            elif item_location_in_img <= 0.45:
                 #self.get_logger().info(f"ARUCO is to the left, turning left")
                 angular = 0.2
-            elif aruco_location_in_img < 0.75:
+            elif item_location_in_img < 0.75:
                 angular = -0.2
             else:
                 #self.get_logger().info(f"ARUCO is to the right, turning right")
                 angular = -0.35
             
 
-            msg = f"Driving towards ARUCO. Location: {aruco_location_in_img:.2f}. Width: {width:0.2f}. Angular: {angular:.2f}"
+            msg = f"Driving towards {self.item_searching_for}. Location: {item_location_in_img:.2f}. Width: {width:0.2f}. Angular: {angular:.2f}"
             self.get_logger().info(msg)
-
-            #self.publish_drive_message(linear_vel, angular) 
+            # self.publish_drive_message(linear_vel, angular) 
 
     def vel_control_loop(self):
         if self.curr_turning_velocity < self.target_turning_velocity:
@@ -247,12 +257,13 @@ class auton_controller(Node):
                 self.waypoint_destination = Location(lat, lon)
                 self.publish_led_message(255, 0, 0)
                 self.state = "scanning"
+                self.item_searching_for = "ARUCO"
                 if self.control_timer is not None:
                     self.control_timer.cancel()
-                    self.aruco_turn_timer = None
-                if self.aruco_turn_timer is not None:
-                    self.aruco_turn_timer.cancel()
-                    self.aruco_turn_timer = None
+                    self.vel_control_loop_timer = None
+                if self.vel_control_loop_timer is not None:
+                    self.vel_control_loop_timer.cancel()
+                    self.vel_control_loop_timer = None
                 if self.led_timer is not None:
                     self.led_timer.cancel()
                     self.led_timer = None

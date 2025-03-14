@@ -77,7 +77,7 @@ class Odometry(Node):
 
 #        self.imu.mode = Mode.NDOF_FMC_OFF_MODE
 #        self.imu.mode = Mode.NDOF_MODE
-        self.imu.mode = Mode.MAGONLY_MODE
+        self.imu.mode = Mode.COMPASS_MODE
     def write_offset(self,register, value):
         # Convert value to little-endian format
         value_bytes = value.to_bytes(2, 'little', signed=True)
@@ -151,11 +151,11 @@ class Odometry(Node):
 
     def broadcast_imu(self):
         #self.quat_to_euler()
-        message = Vector3()
-        message.x = self.imu.magnetic[0]
-        message.y = self.imu.magnetic[1]
-        message.z = self.imu.magnetic[2]
-        self.imu_data_publisher.publish(message)
+        #message = Vector3()
+        #message.x = self.imu.magnetic[0]
+        #message.y = self.imu.magnetic[1]
+        #message.z = self.imu.magnetic[2]
+        #self.imu_data_publisher.publish(message)
         """
         message = Imu()
         message.header.frame_id = "imu"
@@ -175,14 +175,15 @@ class Odometry(Node):
         message.linear_acceleration.z = self.imu.acceleration[2]
         self.imu_data_publisher.publish(message)
         """
-        """
+        
         heading_message = Float32()
         offset_heading = self.imu.euler[0] # - self.initial_offset
+        print(offset_heading)
 #        if(offset_heading > 180):
 #            offset_heading-=360
         heading_message.data = offset_heading
         self.imu_heading_publisher.publish(heading_message)
-        """
+        
 def main(args=None):
         rclpy.init(args=args)
         odometry = Odometry()

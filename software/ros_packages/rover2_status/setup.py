@@ -22,7 +22,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'system_statuses_node = rover2_status.system_statuses_node:main'
+            'system_statuses_node = rover2_status.system_statuses_node:main',
+            'led_node = rover2_status.led_node:main'
         ],
     },
 )

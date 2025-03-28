@@ -11,8 +11,8 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='rover2_status',
-            executable='system_statuses_node',
-            name='rover_status',
+            executable='led_node',
+            name='led_node',
             **config
         )
     ])

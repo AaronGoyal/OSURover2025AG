@@ -32,6 +32,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MotorStatus.msg"
   "msg/RoverSysStatus.msg"
   "msg/WheelStatuses.msg"
+  "msg/LED.msg"
 )
 
 ament_export_dependencies(rosidl_default_runtime)

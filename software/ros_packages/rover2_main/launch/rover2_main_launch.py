@@ -6,12 +6,11 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 
 def generate_launch_description():
-   control = IncludeLaunchDescription(
+   drive_control = IncludeLaunchDescription(
       PythonLaunchDescriptionSource([os.path.join(
          get_package_share_directory('rover2_control')),
          '/rover2_control_launch.py'])
       )
-
    cameras = IncludeLaunchDescription(
       PythonLaunchDescriptionSource([os.path.join(
          get_package_share_directory('rover_camera'),
@@ -23,15 +22,27 @@ def generate_launch_description():
          get_package_share_directory('rosbridge_server'),
          'launch'), '/rosbridge_websocket_launch.xml'])
       )
+   imu = IncludeLaunchDescription(
+      PythonLaunchDescriptionSource([os.path.join(
+         get_package_share_directory('rover2_odometry')),
+         '/rover2_odometry_launch.py'])
+      )
    arm = IncludeLaunchDescription(
       PythonLaunchDescriptionSource([os.path.join(
 	 get_package_share_directory('rover_arm'),
 	 'launch'), '/arm.launch.py'])
       )
 
+#   status = IncludeLaunchDescription(
+#      PythonLaunchDescriptionSource([os.path.join(
+#         get_package_share_directory('rover2_status'),
+#         'launch'), '/rover2_status_launch.py'])
+#      )
    return LaunchDescription([
-      control,
+      drive_control,
       cameras,
       bridge,
+      imu,
       arm
+#      status
    ])

@@ -42,6 +42,7 @@ def generate_launch_description():
     )
     moveit_config = (
         MoveItConfigsBuilder("rover_arm", package_name="rover_arm")
+
         .robot_description(
             file_path="config/rover_arm.urdf.xacro",
             mappings={
@@ -49,6 +50,7 @@ def generate_launch_description():
                     "ros2_control_hardware_type"
                 )
             },
+
         )
         .to_moveit_configs()
     )
@@ -61,6 +63,7 @@ def generate_launch_description():
     rviz_config_file = (
         get_package_share_directory("rover_arm") + "/config/rviz_config.rviz"
     )
+
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",

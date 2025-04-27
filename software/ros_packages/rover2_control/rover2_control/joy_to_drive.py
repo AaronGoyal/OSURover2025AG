@@ -2,19 +2,22 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Float64MultiArray
+from sensor_msgs.msg import JointState
 
 class JoyToVelocityNode(Node):
     def __init__(self):
         super().__init__('joy_to_velocity')
 
+        
         # Publisher for left and right wheel velocities
-        self.left_wheel_pub = self.create_publisher(Float64MultiArray, '/left_wheel_controller/commands', 10)
-        self.right_wheel_pub = self.create_publisher(Float64MultiArray, '/right_wheel_controller/commands', 10)
-
+        #----
+        self.wheel_pub = self.create_publisher(JointState, '/joint_states', 10)
+        #self.right_wheel_pub = self.create_publisher(Float64MultiArray, '/right_wheel_controller/commands', 10.0)
+        #----
         # Subscriber to joy topic
         self.joy_sub = self.create_subscription(
             Joy,
-            '/joy_drive',  # Topic where joy messages are published
+            '/joy',  # Topic where joy messages are published
             self.joy_callback,
             10
         )
@@ -31,12 +34,14 @@ class JoyToVelocityNode(Node):
         right_velocity = linear_velocity + angular_velocity
 
         # Prepare message for left and right wheels
-        left_msg = Float64MultiArray(data=[left_velocity, left_velocity, left_velocity])
-        right_msg = Float64MultiArray(data=[right_velocity, right_velocity, right_velocity])
-
+       
+        drive_msg = JointState(name = ["front_left", "middle_left", "back_left", "front_right", "middle_right", "back_right"],
+                               position = [0.0,0.0,0.0,0.0,0.0,0.0],
+                               velocity = [left_velocity, left_velocity, left_velocity,right_velocity, right_velocity, right_velocity],
+                               effort = [0.0,0.0,0.0,0.0,0.0,0.0])
+        
         # Publish the velocities
-        self.left_wheel_pub.publish(left_msg)
-        self.right_wheel_pub.publish(right_msg)
+        self.wheel_pub.publish(drive_msg)
 
 def main(args=None):
     rclpy.init(args=args)

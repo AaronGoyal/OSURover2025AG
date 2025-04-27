@@ -6,6 +6,8 @@ from launch.event_handlers import OnProcessStart
 from launch.substitutions import Command, FindExecutable, PathJoinSubstitution
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.substitutions import FindPackageShare
+from launch.actions import DeclareLaunchArgument
+
 import os
 
 def load_file(package_name, file_path):
@@ -34,6 +36,13 @@ def generate_launch_description():
     urdf_path = PathJoinSubstitution([FindPackageShare(pkg_name), 'rover2_control', 'drive_control.xacro'])
     controller_config = PathJoinSubstitution([FindPackageShare(pkg_name), 'rover2_control', 'odrive_drive_ros2_control.yaml'])
 
+    ros2_control_hardware_type = DeclareLaunchArgument(
+        "ros2_control_hardware_type",
+        default_value="main",
+        description="Ros2 Control Hardware Interface Type [main, sim]",
+    )
+
+
     drive_ros2_controllers_path = os.path.join(
         get_package_share_directory("rover2_control"),
         "rover2_control",
@@ -49,6 +58,11 @@ def generate_launch_description():
             parameters=[{'robot_description': Command([
                 FindExecutable(name='xacro'), ' ', urdf_path
             ])}]
+        ),
+        Node(
+            package="joy",
+            executable="joy_node",
+            name="joy_node"
         ),
 
         # ros2_control Node

@@ -7,26 +7,23 @@ controller_manager:
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
 
-    left_wheel_controller:
+    can_controller:
       type: forward_command_controller/ForwardCommandController
 
-    right_wheel_controller:
-      type: forward_command_controller/ForwardCommandController
+    
 
 
 
-left_wheel_controller:
+can_controller:
   ros__parameters:
     joints:
       - front_left
       - middle_left
       - back_left
-    interface_name: velocity
-
-right_wheel_controller:
-  ros__parameters:
-    joints:
       - front_right
       - middle_right
       - back_right
-    interface_name: velocity
+    command_interfaces: 
+      - velocity
+
+

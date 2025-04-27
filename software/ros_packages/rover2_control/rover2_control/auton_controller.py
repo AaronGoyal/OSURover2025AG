@@ -6,19 +6,20 @@ from rover2_control_interface.msg import DriveCommandMessage
 from rover2_control_interface.msg import GPSStatusMessage
 from rover2_control import aruco_scan
 from rover2_control import geographic_functions
-from rover2_control import bottle_detect
+#from rover2_control import bottle_detect
 from rover2_status_interface.msg import LED
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float32
-from geographiclib.geodesic import Geodesic
+#from geographiclib.geodesic import Geodesic
 from transforms3d.euler import quat2euler
 from dataclasses import dataclass
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
+#from rclpy.qos import QoSProfile, QoSReliabilityPolicy
+#from sensor_msgs.msg import Image
+#from cv_bridge import CvBridge
 import json
 from dataclasses import asdict
-import bottle_detect
+import cv2
+#import bottle_detect
 
 @dataclass
 class Location:
@@ -26,15 +27,16 @@ class Location:
     longitude: float
 
 class auton_controller(Node):
+    state = "stopped"
+    led_state = "green"
+    
     waypoint_destination = None
     subpoints = None
-    curr_destination = None
+    curr_point_destination = None
+    latest_img_frame = None
     rover_position = Location(44.56726, -123.27363)
     current_heading = 0.0
     target_heading = None
-    state = "stopped"
-    control_timer = None 
-    vel_control_loop_timer = None
     offset = None
     time_driving = 0.0
     time_looking_for_item = None
@@ -42,27 +44,32 @@ class auton_controller(Node):
     target_turning_velocity = 0.0
     curr_turning_velocity = 0.0
     pause_time = None
-    led_state = "green"
-    led_timer = None
-    latest_img_frame = None
     bottle_detector = None
+    camera = None
+
+    control_timer = None 
+    vel_control_loop_timer = None
+    led_timer = None
+    camera_timer = None
 
 
     def __init__(self):
         super().__init__('auton_controller')
-        self.bridge = CvBridge()
-        self.bottle_detector = bottle_detect.bottle_detector()
+        #self.bottle_detector = bottle_detect.bottle_detector()
         self.control_subscription = self.create_subscription( String, 'autonomous/auton_control', self.control_listener_callback, 10)
         self.gps_subscription = self.create_subscription(GPSStatusMessage, 'tower/status/gps', self.gps_listener_callback, 10)
         #self.imu_subscription = self.create_subscription(Imu, 'imu/data', self.imu_listener_callback, 10)
         self.imu_subscription = self.create_subscription(Float32, 'imu/data/heading', self.imu_heading_listener_callback, 10)
-        qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT, depth=10)
-        self.img_subscription = self.create_subscription(Image, '/cameras/main_navigation/image_256x144', self.ros_img_callback, qos_profile)
+        #qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT, depth=10)
+        #self.img_subscription = self.create_subscription(Image, '/cameras/main_navigation/image_256x144', self.ros_img_callback, qos_profile)
 
         self.response_publisher = self.create_publisher(String, 'autonomous/auton_control_response', 10)
         self.drive_publisher = self.create_publisher(DriveCommandMessage, 'command_control/ground_station_drive', 10)
         self.led_publisher = self.create_publisher(LED, 'autonomous_LED/color', 10)
         #self.publish_led_message(,0,0)
+
+        self.camera_timer = self.create_timer(0.05, self.camera_loop)
+        self.get_logger().info("Initialized")
         
     def control_loop(self):
         if self.state == "stopped":
@@ -73,21 +80,16 @@ class auton_controller(Node):
                 self.vel_control_loop_timer.cancel()
                 self.vel_control_loop_timer = None
             self.subpoints = None
-            self.curr_destination = None
+            self.curr_point_destination = None
             self.waypoint_destination = None
             self.target_heading = None
             self.time_looking_for_item = None
             self.pause_time = None
+            self.get_logger().info("Stopped")
             self.publish_log_msg("Stopped autonomous control")
             return
 
         if self.state == "turning":
-            if self.curr_destination is None:
-                self.target_heading = geographic_functions.get_target_heading(self.rover_position, self.waypoint_destination)
-                self.subpoints = geographic_functions.get_points_along_line(self.rover_position, self.waypoint_destination, self.target_heading)
-                msg = "subpoints;" + json.dumps([asdict(loc) for loc in self.subpoints])
-                self.publish_log_msg(msg)
-                self.set_next_dest()
 
             heading_error = self.get_heading_error()
             self.get_logger().info("Turning. Target: " + f"{self.target_heading:.1f}" + ". Current: " + f"{self.current_heading:.1f}" + ", Error: " + f"{heading_error:.1f}")
@@ -104,18 +106,23 @@ class auton_controller(Node):
                 self.publish_drive_message(0.0, angular_speed) 
 
         elif self.state == "driving":
-            self.target_heading = geographic_functions.get_target_heading(self.rover_position, self.curr_destination)
-            distance_to_nearest_point = geographic_functions.get_distance_to_location(self.rover_position, self.curr_destination)
+            self.target_heading = geographic_functions.get_target_heading(self.rover_position, self.curr_point_destination)
+            distance_to_nearest_point = geographic_functions.get_distance_to_location(self.rover_position, self.curr_point_destination)
             distance_to_waypoint = geographic_functions.get_distance_to_location(self.rover_position, self.waypoint_destination)
-            curvature = geographic_functions.compute_curvature(self.curr_destination, self.get_heading_error())
+            curvature = geographic_functions.compute_curvature(self.curr_point_destination, self.get_heading_error())
 
 
-            if distance_to_nearest_point < 11.0:
+            if distance_to_nearest_point < 9.0:
                 self.set_next_dest()
-                if self.curr_destination is None:
+                if self.curr_point_destination is None:
+                    # send message to unity
+                    # maybe get back the FIND command
                     self.state = "stopped"
                     self.get_logger().info("Reached destination. Stopping...")
+                    self.publish_log_msg("stopped")
                     return
+            elif distance_to_nearest_point < 13.0:
+                self.publish_log_msg("getting_close")
 
             linear = 0.65
             angular = -curvature * linear * 1.7
@@ -131,6 +138,7 @@ class auton_controller(Node):
         
         elif self.state == "scanning":
             # turn until an aruco tag is found
+            self.get_logger().info(f"Scanning for {self.item_searching_for}...")
             if self.vel_control_loop_timer is None:
                 self.vel_control_loop_timer = self.create_timer(0.1, self.vel_control_loop)
 
@@ -149,8 +157,8 @@ class auton_controller(Node):
             width = None
             if self.item_searching_for == "ARUCO":
                 item_location_in_img, width = aruco_scan.detect_first_aruco_marker(self, self.latest_img_frame)
-            elif self.item_searching_for == "bottle":
-                item_location_in_img, width = self.bottle_detector.get_bottle(self.latest_img_frame)
+            # elif self.item_searching_for == "bottle":
+            #     item_location_in_img, width = self.bottle_detector.get_bottle(self.latest_img_frame)
 
             if item_location_in_img == None:
                 self.time_looking_for_item += 0.1
@@ -195,8 +203,8 @@ class auton_controller(Node):
             item_location_in_img, width = None
             if self.item_searching_for == "ARUCO":
                 item_location_in_img, width = aruco_scan.detect_first_aruco_marker(self, self.latest_img_frame)
-            elif self.item_searching_for == "bottle":
-                item_location_in_img, width = self.bottle_detector.get_bottle(self.latest_img_frame)
+            # elif self.item_searching_for == "bottle":
+            #     item_location_in_img, width = self.bottle_detector.get_bottle(self.latest_img_frame)
 
             if item_location_in_img == None:
                 self.get_logger().info(f"Lost the {self.item_searching_for}")
@@ -248,37 +256,47 @@ class auton_controller(Node):
 
         try:
             parts = msg.data.split(';')
-            command = parts[0]
-            lat = float(parts[1])
-            lon = float(parts[2])
-
-            if command == "GOTO":
-                self.get_logger().info(f"Command GOTO received with target lat: {lat}, lon: {lon}")
-                self.waypoint_destination = Location(lat, lon)
-                self.publish_led_message(255, 0, 0)
-                self.state = "scanning"
-                self.item_searching_for = "ARUCO"
-                if self.control_timer is not None:
-                    self.control_timer.cancel()
-                    self.vel_control_loop_timer = None
-                if self.vel_control_loop_timer is not None:
-                    self.vel_control_loop_timer.cancel()
-                    self.vel_control_loop_timer = None
-                if self.led_timer is not None:
-                    self.led_timer.cancel()
-                    self.led_timer = None
-                self.control_timer = self.create_timer(0.1, self.control_loop)
-            elif command == "STOP":
-                self.get_logger().info("STOP command received. Stopping autonomous navigation.")
-                self.publish_led_message(0, 0, 255)
-                if self.led_timer is not None:
-                    self.led_timer.cancel()
-                    self.led_timer = None
-                self.state = "stopped"
-            else:
-                self.get_logger().warn(f"Unknown command: {command}")
         except (IndexError, ValueError) as e:
             self.get_logger().error(f"Failed to parse message: {msg.data}. Error: {e}")
+            return
+
+        command = parts[0]
+
+        if command == "GOTO":
+            lat = float(parts[1])
+            lon = float(parts[2])
+            self.get_logger().info(f"Command GOTO received with target lat: {lat}, lon: {lon}")
+            self.waypoint_destination = Location(lat, lon)
+            self.publish_led_message(255, 0, 0)
+            if self.state != "driving":
+                self.state = "turning"
+                if self.led_timer is not None:
+                    self.led_timer.cancel()
+                    self.led_timer = None
+                
+                if self.control_timer is None:
+                    self.control_timer = self.create_timer(0.1, self.control_loop)
+            
+            self.target_heading = geographic_functions.get_target_heading(self.rover_position, self.waypoint_destination)
+            self.subpoints = geographic_functions.get_points_along_line(self.rover_position, self.waypoint_destination, self.target_heading)
+            msg = "subpoints;" + json.dumps([asdict(loc) for loc in self.subpoints])
+            self.publish_log_msg(msg)
+            self.set_next_dest()
+        elif command == "FIND":
+            self.item_searching_for = parts[1]
+            self.state = "scanning"
+            self.get_logger().info(f"Finding " + self.item_searching_for)
+            if self.control_timer is None:
+                self.control_timer = self.create_timer(0.1, self.control_loop)
+        elif command == "STOP":
+            self.get_logger().info("STOP command received. Stopping autonomous navigation.")
+            self.publish_led_message(0, 0, 255)
+            if self.led_timer is not None:
+                self.led_timer.cancel()
+                self.led_timer = None
+            self.state = "stopped"
+        else:
+            self.get_logger().warn(f"Unknown command: {command}")
     
     def publish_led_message(self, red, green, blue):
         #self.get_logger().info(f"Published LED msg. R:{red}, G:{green}, B:{blue}")
@@ -331,20 +349,23 @@ class auton_controller(Node):
     
     def set_next_dest(self):
         if self.subpoints is not None and len(self.subpoints) > 0:
-            self.curr_destination = self.subpoints[0]
+            self.curr_point_destination = self.subpoints[0]
             self.subpoints.pop(0)
-        elif self.waypoint_destination is not None:
-            self.curr_destination = self.waypoint_destination
-            self.waypoint_destination = None
+        elif self.curr_point_destination != self.waypoint_destination:
+            self.curr_point_destination = self.waypoint_destination
         else:
-            self.curr_destination = None
-        self.get_logger().info("Set new dest: " + str(self.curr_destination))
-        if self.curr_destination is not None:
-            self.publish_log_msg("nextdest;" + str(self.curr_destination.latitude) + ";" + str(self.curr_destination.longitude))
+            self.curr_point_destination = None
+        self.get_logger().info("Set new dest: " + str(self.curr_point_destination))
+        if self.curr_point_destination is not None:
+            self.publish_log_msg("nextdest;" + str(self.curr_point_destination.latitude) + ";" + str(self.curr_point_destination.longitude))
     
     def imu_heading_listener_callback(self, msg):
         """Listens to auton_control topic for commands"""
         self.current_heading = msg.data
+        if self.current_heading > 360.0:
+            self.current_heading -= 360.0
+        elif self.current_heading < 0.0:
+            self.current_heading += 360.0
         #self.get_logger().info(f"Received heading: " + str(self.current_heading))
 
     def gps_listener_callback(self, msg):
@@ -352,8 +373,24 @@ class auton_controller(Node):
         self.rover_position.latitude = msg.rover_latitude
         self.rover_position.longitude = msg.rover_longitude
 
-    def ros_img_callback(self, msg):
-        self.latest_img_frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+    # def ros_img_callback(self, msg):
+    #     self.latest_img_frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
+    def camera_loop(self):
+        if self.camera == None:
+            self.camera = cv2.VideoCapture('/dev/video10')
+
+        if not self.camera.isOpened():
+            self.get_logger().info("Camera not opened yet")
+            return
+
+        ret, frame = self.camera.read()
+        if not ret:
+            self.get_logger().info("Failed to get camera image")
+            return
+        
+        self.latest_img_frame = frame
+
 
 def main(args=None):
     rclpy.init(args=args)

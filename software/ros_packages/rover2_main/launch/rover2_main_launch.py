@@ -30,7 +30,7 @@ def generate_launch_description():
    arm = IncludeLaunchDescription(
       PythonLaunchDescriptionSource([os.path.join(
 	 get_package_share_directory('rover_arm'),
-	 'launch'), '/arm.launch.py'])
+	 'launch'), '/rover_arm.launch.py'])
       )
 
 #   status = IncludeLaunchDescription(
@@ -43,6 +43,6 @@ def generate_launch_description():
       cameras,
       bridge,
       imu,
-      arm
-#      status
+      arm,
+      #      status
    ])

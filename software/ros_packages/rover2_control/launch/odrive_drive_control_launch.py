@@ -48,6 +48,16 @@ def generate_launch_description():
         "rover2_control",
         "odrive_drive_ros2_control.yaml",
     )
+
+    ros2_control_node = Node(
+        package="controller_manager",
+        executable="ros2_control_node",
+        parameters=[drive_ros2_controllers_path],
+
+    )
+
+    
+
     return LaunchDescription([
         # Robot State Publisher
         Node(
@@ -74,6 +84,7 @@ def generate_launch_description():
             ])}, controller_config],
             output='screen'
         ),
+	ros2_control_node,
         # Joy Node to convert joystick input to velocities
         Node(
             package='rover2_control',  # Replace with your package name
@@ -83,32 +94,16 @@ def generate_launch_description():
         ),
 
         # Load joint_state_broadcaster after ros2_control_node is up
-        RegisterEventHandler(
-            event_handler=OnProcessStart(
-                target_action=Node(
-                    package='controller_manager',
-                    executable='ros2_control_node'
-                ),
-                on_start=[
-                    Node(
-                        package='controller_manager',
-                        executable='spawner',
-                        arguments=['joint_state_broadcaster'],
-                        output='screen'
-                    ),
-                    Node(
-                        package='controller_manager',
-                        executable='spawner',
-                        arguments=['left_wheel_controller'],
-                        output='screen'
-                    ),
-                    Node(
-                        package='controller_manager',
-                        executable='spawner',
-                        arguments=['right_wheel_controller'],
-                        output='screen'
-                    )
-                ]
-            )
+	Node(
+            package='controller_manager',
+            executable='spawner',
+            arguments=['joint_state_broadcaster'],
+            output='screen'
+        ),
+        Node(
+            package='controller_manager',
+            executable='spawner',
+            arguments=['can_controller', "-c", "/controller_manager"],
+            output='screen'
         )
     ])

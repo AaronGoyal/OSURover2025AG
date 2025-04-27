@@ -23,7 +23,6 @@ can_controller:
       - front_right
       - middle_right
       - back_right
-    command_interfaces: 
-      - velocity
+    interface_name: velocity
 
 

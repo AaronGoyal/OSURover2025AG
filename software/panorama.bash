@@ -18,8 +18,9 @@ check_image() {
 for i in {0..9}
 do
   ros2 topic pub -r 30 --once /tower/pan_tilt/control rover2_control_interface/msg/TowerPanTiltControlMessage "{should_center: false, relative_pan_adjustment: -160, relative_tilt_adjustment: 0}"
-  sleep 0.5    
-  ffmpeg -y -loglevel quiet -f v4l2 -i /dev/video12 -video_size 1920x1080 -frames:v 1 "$image_dir/pano_$i.jpg"
+  sleep 1    
+  ffmpeg -y -loglevel quiet -f v4l2 -input_format mjpeg -video_size 800x600 -i /dev/rover/camera_main_navigation -frames:v 1 "$image_dir/pano_$i.jpg"
+  sleep 1    
   check_image "/pano_$i.jpg"
 done 
 
@@ -33,8 +34,9 @@ sleep 0.5
 for i in {10..19}
 do
   ros2 topic pub -r 30 --once /tower/pan_tilt/control rover2_control_interface/msg/TowerPanTiltControlMessage "{should_center: false, relative_pan_adjustment: -160, relative_tilt_adjustment: 0}"
-  ffmpeg -y -loglevel quiet -f v4l2 -i /dev/video12 -video_size 1920x1080 -frames:v 1 "$image_dir/pano_$i.jpg"
-  sleep 0.5
+  sleep 1
+  ffmpeg -y -loglevel quiet -f v4l2 -input_format mjpeg -video_size 800x600 -i /dev/rover/camera_main_navigation -frames:v 1 "$image_dir/pano_$i.jpg"
+  sleep 1
   
   check_image "/pano_$i.jpg"
 

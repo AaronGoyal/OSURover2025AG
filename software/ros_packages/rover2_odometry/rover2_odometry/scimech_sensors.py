@@ -13,44 +13,47 @@ class ScimechSensors(Node):
 
         self.scimech_data_publisher_ = self.create_publisher(Float32MultiArray, 'scimech/data', 10)
         
-        timer_period = 5  # seconds
+        timer_period = 1  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)        
 
         self.logger = self.get_logger()
 
-        self.humidity = 0
-        self.hydrogen = 0
-        self.ozone = 0
-        self.temperature = 0
+        self.humidity = 0.0
+        self.hydrogen = 0.0
+        self.ozone = 0.0
+        self.temperature = 0.0
 
-        self.scimech_arduino = serial.Serial('PLACEHOLDER',115200, timeout=1)
-                 
+        self.scimech_arduino = serial.Serial('/dev/ttyACM0',9600, timeout=1)
+        self.scimech_arduino.flush()
 
     def read_scimech_serial_data(self):
-        
-        if self.scimech_arduino > 0:
-            line = self.scimech_arduino.readline().decode('utf-8').rstrip()
-            self.logger.info("Reading from arduino: {}".format(line))
-            data_array = line.split(",")
-            
-            self.temperature = data_array[0]
-            self.humidity = data_array[1]
-            self.hydrogen = data_array[2]
-            self.ozone = data_array[3]
-        else:
-            self.logger.error("Arduino serial device not found")
-            
-                
+        while True:
+            if self.scimech_arduino.in_waiting > 0:
+                try: 
+                    line = self.scimech_arduino.readline().decode('utf-8').rstrip()
+                    print(line)
+                    self.logger.info("Reading from arduino: {}".format(line))
+                    data_array = line.split(",")
+                    if(len(data_array)>1):
+                        
+                        self.temperature = float(data_array[0])
+                        self.humidity = float(data_array[1])
+                        self.hydrogen = float(data_array[2])
+                        self.ozone = float(data_array[3])
+                    self.scimech_arduino.flush()
+                    
+                except Exception as e:
+                    self.logger.info(e)
+                break
 
     def timer_callback(self):
-
-
+        
+        self.read_scimech_serial_data()
         msg = Float32MultiArray()
         msg.data = [self.humidity,self.hydrogen,self.ozone,self.temperature]
-        self.publisher_.publish(msg)
+        self.scimech_data_publisher_.publish(msg)
         self.logger.info('Publishing: "%s"' % msg.data)
-        self.i += 1
-
+       
 
 def main(args=None):
     rclpy.init(args=args)

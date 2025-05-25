@@ -167,12 +167,13 @@ class IrisController(Node):
             print("Drive command")
             left_y_axis = self.registers[MODBUS_REGISTERS["LEFT_STICK_Y_AXIS"]]
             right_y_axis = self.registers[MODBUS_REGISTERS["RIGHT_STICK_Y_AXIS"]]
-
+            
             if left_y_axis == 0 and right_y_axis == 0:
                 command.controller_present = False
                 command.ignore_drive_control = True
                 command.drive_twist.linear.x = 0.0
                 command.drive_twist.angular.z = 0.0
+            
             else:
 
                 left = (left_y_axis - SBUS_VALUES["SBUS_MID"]) / SBUS_VALUES[
@@ -281,13 +282,13 @@ class IrisController(Node):
         buttons[DEFAULT_MOVEIT_CONTROLLER_JOY_BUTTON] = 1
        
         if self.registers[MODBUS_REGISTERS[REGISTER_STATE_MAPPING["POSE_VS_IK_CONTROL"]]] > SBUS_VALUES["SBUS_MID"] and not self.published_pose_controller:
-            print("Change controller pose")
+            print("Change controller")
             self.publish_joy_msg(axes,buttons)
             self.publish_joy_msg(axes,buttons_default) # This is needed for the controller switcher, as it will only start to look for a switch if the button it is mapped to has changed between inputs
             sleep(0.5)
             self.published_pose_controller = True
             self.published_ik_controller = False            
-
+        """
         elif self.registers[MODBUS_REGISTERS[REGISTER_STATE_MAPPING["POSE_VS_IK_CONTROL"]]] < SBUS_VALUES["SBUS_MID"] and not self.published_ik_controller:            
             print("Change controller ik")
             self.publish_joy_msg(axes,buttons)
@@ -295,7 +296,7 @@ class IrisController(Node):
             sleep(0.5)
             self.published_pose_controller = False
             self.published_ik_controller = True
-
+        """
 
     def broadcast_iris_status(self):
         status_message = IrisStatusMessage()

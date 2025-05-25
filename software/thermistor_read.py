@@ -4,6 +4,7 @@ import cv2
 import matplotlib.pyplot as plt
 from rich.live import Live
 from rich.table import Table
+import math
 
 odrive_errors_by_code = {
     "0": "NO ERROR",
@@ -33,15 +34,15 @@ odrive_errors_by_code = {
 
 
 
-nodes = [0,1,2,3,4,5]
-node_fet_temp = [0,0,0,0,0,0]
-node_motor_temp = [0,0,0,0,0,0]
-node_error_msg =[(0,0) for i in range(len(nodes))]
-node_velocity = [0,0,0,0,0,0]
-node_position = [0,0,0,0,0,0]
-bus = can.interface.Bus("can0", interface="socketcan")
-node_iq_setpoint = [0,0,0,0,0,0]
-node_iq_measured = [0,0,0,0,0,0]
+nodes = [0,1,2,3,4,5,6]
+node_fet_temp = [0,0,0,0,0,0,0]
+node_motor_temp =  [0,0,0,0,0,0,0]
+node_error_msg =[(0,0) for i in range(len(nodes)+1)]
+node_velocity =  [0,0,0,0,0,0,0]
+node_position =   [0,0,0,0,0,0,0]
+bus = can.interface.Bus("can1", interface="socketcan")
+node_iq_setpoint =   [0,0,0,0,0,0,0]
+node_iq_measured =   [0,0,0,0,0,0,0]
 # Flush CAN RX buffer so there are no more old pending messages
 while not (bus.recv(timeout=0) is None): pass
 
@@ -65,11 +66,12 @@ def generate_table():
 
 def round(value, sigfig):
     value = value*(10**sigfig)
-    value = int(value)
+    if not math.isnan(value):
+        value = int(value)
     value = value/(10**sigfig)
     return value
 
-with Live(generate_table(), refresh_per_second=15) as live:
+with Live(generate_table(), refresh_per_second=1) as live:
     for msg in bus:
         for node_id in nodes:
             if msg.arbitration_id == (node_id << 5 | 0x15): # 0x01: Heartbeat

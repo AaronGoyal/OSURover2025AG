@@ -128,20 +128,20 @@ def generate_launch_description():
             "--controller-manager-timeout",
             "300",
             "--controller-manager",
-            "/controller_manager/arm",
+            "/controller_manager",
         ],
     )
 
     rover_arm_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["rover_arm_controller", "-c", "/controller_manager/arm"],
+        arguments=["rover_arm_controller", "-c", "/controller_manager"],
     )
 
     moveit_arm_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["rover_arm_controller_moveit", "-c", "/controller_manager/arm"],
+        arguments=["rover_arm_controller_moveit", "-c", "/controller_manager"],
     )
 
 
@@ -246,7 +246,7 @@ def generate_launch_description():
             "color_height": 720,
             "pointcloud.enable": True,
             "align_depth.enable": True,
-            "serial_no":"_218622273613",
+            #"serial_no":"_218622273613",
             "depth_fps": 10,
             "rgb_fps": 10,
         }],

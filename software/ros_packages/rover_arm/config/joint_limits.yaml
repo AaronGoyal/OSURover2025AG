@@ -25,7 +25,7 @@ joint_limits:
     max_acceleration: 0.5
   wrist_roll_joint:
     has_velocity_limits: true
-    max_velocity: 6.0
+    max_velocity: 60.0
     has_acceleration_limits: true
     max_acceleration: 0.5
   shoulder_joint:

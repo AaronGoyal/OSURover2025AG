@@ -75,7 +75,7 @@ struct ControllerMappings {
 bool convertJoyToCmd(const std::vector<float>& axes, const std::vector<int>& buttons,
                      std::unique_ptr<geometry_msgs::msg::TwistStamped>& twist,
                      std::unique_ptr<control_msgs::msg::JointJog>& joint,
-                     bool& use_ik, const ControllerMappings& controllerMappings)
+                     bool& use_ik, const ControllerMappings& controllerMappings, float& slowdown)
 {
   // Give joint jogging priority because it is only buttons
   // If any joint jog command is requested, we are only publishing joint commands
@@ -86,6 +86,15 @@ bool convertJoyToCmd(const std::vector<float>& axes, const std::vector<int>& but
   else if(buttons[controllerMappings.BUTTON_MAP.at("CHANGE_VIEW")]){
     use_ik = true;
   }
+  printf("Slowdown: %f\n", slowdown);
+
+  if (buttons[controllerMappings.BUTTON_MAP.at("A")]){
+    if (slowdown == 1.0){
+      slowdown = 0.2;
+    } else {
+      slowdown = 1.0;
+    }
+  }
 
   if(use_ik){ //ik controls
     if (axes[controllerMappings.AXIS_MAP.at("D_PAD_Y")] || buttons[controllerMappings.BUTTON_MAP.at("LEFT_BUMPER")] || buttons[controllerMappings.BUTTON_MAP.at("RIGHT_BUMPER")])
@@ -94,7 +103,7 @@ bool convertJoyToCmd(const std::vector<float>& axes, const std::vector<int>& but
       // joint->joint_names.push_back("base_joint");
       // joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("D_PAD_X")]);
       joint->joint_names.push_back("shoulder_joint");
-      joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("D_PAD_Y")]);
+      joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("D_PAD_Y")] * slowdown);
       // joint->joint_names.push_back("wrist_roll_joint");
       // joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("D_PAD_X")]);
       // Map the diamond to the distal joints
@@ -102,19 +111,19 @@ bool convertJoyToCmd(const std::vector<float>& axes, const std::vector<int>& but
     }
 
     // The bread and butter: map buttons to twist commands
-    twist->twist.linear.y = axes[controllerMappings.AXIS_MAP.at("LEFT_STICK_Y")];
-    twist->twist.linear.x = -1.0 * axes[controllerMappings.AXIS_MAP.at("LEFT_STICK_X")];
+    twist->twist.linear.y = axes[controllerMappings.AXIS_MAP.at("LEFT_STICK_Y")] * slowdown;
+    twist->twist.linear.x = -1.0 * axes[controllerMappings.AXIS_MAP.at("LEFT_STICK_X")] * slowdown;
 
     double lin_y_right = -0.5 * (axes[controllerMappings.AXIS_MAP.at("RIGHT_TRIGGER")] - controllerMappings.AXIS_DEFAULTS.at("RIGHT_TRIGGER"));
     double lin_y_left = 0.5 * (axes[controllerMappings.AXIS_MAP.at("LEFT_TRIGGER")] - controllerMappings.AXIS_DEFAULTS.at("LEFT_TRIGGER"));
-    twist->twist.linear.z = lin_y_right + lin_y_left;
+    twist->twist.linear.z = (lin_y_right + lin_y_left) * slowdown;
 
     //pitch
-    twist->twist.angular.x = axes[controllerMappings.AXIS_MAP.at("RIGHT_STICK_Y")];
+    twist->twist.angular.x = axes[controllerMappings.AXIS_MAP.at("RIGHT_STICK_Y")] * slowdown;
     //Yaw
-    twist->twist.angular.y = axes[controllerMappings.AXIS_MAP.at("RIGHT_STICK_X")];
+    twist->twist.angular.y = axes[controllerMappings.AXIS_MAP.at("RIGHT_STICK_X")] * slowdown;
     // Roll
-    twist->twist.angular.z = axes[controllerMappings.AXIS_MAP.at("D_PAD_X")];
+    twist->twist.angular.z = axes[controllerMappings.AXIS_MAP.at("D_PAD_X")] * slowdown;
 
     // double roll_positive = buttons[controllerMappings.BUTTON_MAP.at("RIGHT_BUMPER")];
     // double roll_negative = -1 * (buttons[xontrollerMappings.BUTTON_MAP.at("LEFT_BUMPER")]);
@@ -168,7 +177,7 @@ public:
     initializeControllerMappings(controller_type);
 
     use_ik = true;
-
+    slowdown = 1.0;
     // Setup pub/sub
     joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
         JOY_TOPIC, rclcpp::SystemDefaultsQoS(),
@@ -242,7 +251,7 @@ public:
     updateCmdFrame(frame_to_publish_, msg->buttons, controller_map);
 
     // Convert the joystick message to Twist or JointJog and publish
-    if (convertJoyToCmd(msg->axes, msg->buttons, twist_msg, joint_msg, use_ik, controller_map))
+    if (convertJoyToCmd(msg->axes, msg->buttons, twist_msg, joint_msg, use_ik, controller_map, slowdown))
     {
       // publish the TwistStamped
       twist_msg->header.frame_id = frame_to_publish_;
@@ -266,6 +275,8 @@ private:
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr servo_start_client_;
 
   bool use_ik;
+
+  float slowdown;
 
   std::string frame_to_publish_;
 

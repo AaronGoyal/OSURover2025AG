@@ -180,7 +180,7 @@
     <child link="arm_gripper"/>
     <origin rpy="0 0 0" xyz="-0.050 0 0.050484"/>
     <axis xyz="0 0 1"/>
-    <limit effort="1000.0" velocity="6.0"/>
+    <limit effort="1000.0" velocity="60.0"/>
   </joint>
 
 </robot>

@@ -95,7 +95,7 @@ def generate_launch_description():
             **config
         ),
         # Load joint_state_broadcaster after ros2_control_node is up
-
+  
         Node(
             package='rover2_control',
             executable='chassis_pan_tilt_control',
@@ -104,21 +104,42 @@ def generate_launch_description():
         ),
         Node(
             package='rover2_control',
+            executable='drill_control',
+            name='drill_control',
+            **config
+        ),
+        Node(
+            package='rover2_control',
             executable='tower_pan_tilt_control',
             name='tower_pan_tilt',
             **config
         ),
-#        Node(
-#            package='rover2_control',
-#            executable='effectors_control',
-#            name='effectors',
-#            **config
-#        ),
-#        Node(
-#            package='rover2_control',
-#            executable='joint_position_control',
-#            name='joint_position',
-#            **config
-#        ),
-
+        Node(
+            package='rover2_control',
+            executable='effectors_control',
+            name='effectors',
+            **config
+        ),
+        Node(
+            package='rover2_control',
+            executable='joint_position_control',
+            name='joint_position',
+            **config
+        ),
+        Node(
+            package='rover2_control',
+            executable='drive_control',
+            name='rear_bogie',
+            parameters=[{
+                '~port': '/dev/rover/ttyEffectors',
+                '~scimech_control_topic_main_actuator': 'scimech_control/main_actuator',
+                '~scimech_control_topic_flexinol': 'scimech_control/flexinol',
+                '~scimech_control_topic_secondary_actuator': 'scimech_control/secondary_actuator',
+                '~drive_control_status_topic': 'drive_status/rear',
+                '~first_motor_id': 1,
+                '~second_motor_id':2,
+                '~third_motor_id':3,
+            }],
+            **config
+        ),
     ])

@@ -43,9 +43,10 @@ class GripperMoveNode(Node):
             self.joint_states_callback,
             10)
         self.keyboard_offsets = {
-            "q" : self.make_pose(0.0,0.0,0.0),
-            "w" : self.make_pose(0.01, 0.0, 0.0),
+            "q" : self.make_pose(0.05,0.0,0.0),
+            "w" : self.make_pose(-0.05, 0.0, 0.0),
         }
+        self.keyboard_offsets_inverse = self.inverse_pose(self.keyboard_offsets)
 
         self.push_button = self.make_pose(0.0, 0.0, 0.05) #x, y, z for pressing a button
         # self.joint_angle_subscriber = self.create_subscription(
@@ -59,17 +60,34 @@ class GripperMoveNode(Node):
         self.subscription = self.create_subscription(
             String,
             '/auton_typing',
-            self.text_callback,
+            self.set_callback_flag,
             10
         )
         self.current_pose = None
         self.is_done = False
         self.succeed = False
+        self.is_callback = False
+        self.command = ""
 
         self.get_logger().info('GripperMoveNode is ready.')
 
     def joint_states_callback(self, msg):
         self.latest_joint_state = msg
+    
+    def inverse_pose(self, offset_dict):
+        new_dict = {}
+        for key, val in offset_dict.items():
+            pose = Pose()
+            pose.position.x = val.position.x
+            pose.position.y = val.position.y
+            pose.position.z = val.position.z
+            pose.orientation.x = 0.0
+            pose.orientation.y = 0.0
+            pose.orientation.z = 0.0
+            pose.orientation.w = 1.0 # Neutral orientation
+            new_dict[key] = pose
+
+        return new_dict  
 
     def make_pose(self, x, y, z):
         pose = Pose()
@@ -81,135 +99,162 @@ class GripperMoveNode(Node):
         pose.orientation.z = 0.0
         pose.orientation.w = 0.7071068  # Neutral orientation
         return pose
-
-    def text_callback(self, msg):
-        command = msg.data.lower().strip()
-        for key_input in command:
+    def set_callback_flag(self, msg):
+        self.is_callback = True
+        self.command = msg.data.lower().strip()
+        return
+    
+    def text_callback(self):
+        #command = msg.data.lower().strip()
+        self.get_logger().info(f"What was recieved {self.command}")
+        i = len(self.command)
+        for key_input in self.command:
+            self.get_logger().info(f"what is key {key_input}")
             if key_input in self.keyboard_offsets:
-                # Create a motion planning request
-                motion_request = MotionPlanRequest()
-                motion_request.workspace_parameters.header.frame_id = self.reference_frame
-                motion_request.workspace_parameters.header.stamp = self.get_clock().now().to_msg()
+                # # Create a motion planning request
+                # motion_request = MotionPlanRequest()
+                # motion_request.workspace_parameters.header.frame_id = self.reference_frame
+                # motion_request.workspace_parameters.header.stamp = self.get_clock().now().to_msg()
                 
-                # Set the planning group
-                motion_request.group_name = "rover_arm"
+                # # Set the planning group
+                # motion_request.group_name = "rover_arm"
                 
-                # Set start state to the current state
-                motion_request.start_state = RobotState()
-                motion_request.start_state.joint_state.header = self.latest_joint_state.header
-                motion_request.start_state.joint_state.name = self.latest_joint_state.name
-                motion_request.start_state.joint_state.position = self.latest_joint_state.position
-                motion_request.start_state.joint_state.velocity = self.latest_joint_state.velocity
+                # # Set start state to the current state
+                # motion_request.start_state = RobotState()
+                # motion_request.start_state.joint_state.header = self.latest_joint_state.header
+                # motion_request.start_state.joint_state.name = self.latest_joint_state.name
+                # motion_request.start_state.joint_state.position = self.latest_joint_state.position
+                # motion_request.start_state.joint_state.velocity = self.latest_joint_state.velocity
                 
-                #get current pose
-                self.get_pose()
+                # #get current pose
+                # self.get_pose()
 
-                #Set target pose
-                target_pose = self.keyboard_offsets[key_input]
-                pose = PoseStamped()
-                pose.header.frame_id = self.reference_frame
-                pose.pose = self.add_pose_position(target_pose, self.current_pose.pose)
+                # #Set target pose
+                # target_pose = self.keyboard_offsets[key_input]
+                # pose = PoseStamped()
+                # pose.header.frame_id = self.reference_frame
+                # pose.pose = self.add_pose_position(target_pose, self.current_pose.pose)
+                # pose.pose.orientation = self.current_pose.pose.orientation
+                # self.get_logger().info(f"{pose.pose.position}")
+                # #set planning params
+                # motion_request.max_velocity_scaling_factor = 0.5
+                # motion_request.max_acceleration_scaling_factor = 0.5
+                # motion_request.allowed_planning_time = 5.0
+                # motion_request.num_planning_attempts = 10
 
-                #set planning params
-                motion_request.max_velocity_scaling_factor = 0.5
-                motion_request.max_acceleration_scaling_factor = 0.5
-                motion_request.allowed_planning_time = 5.0
-                motion_request.num_planning_attempts = 10
+                # motion_request.goal_constraints = [Constraints()]
+                # #motion_request.path_constraints = [Constraints()]
 
-                motion_request.goal_constraints = [Constraints()]
-                motion_request.path_constraints = [Constraints()]
+                # #create position contraint
+                # pose_constraint = PositionConstraint()
+                # pose_constraint.header.frame_id = pose.header.frame_id
+                # pose_constraint.link_name = self.target_frame
+                # pose_constraint.target_point_offset.x = 0.0
+                # pose_constraint.target_point_offset.y = 0.0
+                # pose_constraint.target_point_offset.z = 0.0
 
-                #create position contraint
-                pose_constraint = PositionConstraint()
-                pose_constraint.header.frame_id = pose.header.frame_id
-                pose_constraint.link_name = self.target_frame
-                pose_constraint.target_point_offset.x = 0.0
-                pose_constraint.target_point_offset.y = 0.0
-                pose_constraint.target_point_offset.z = 0.0
+                # #create bounding box: target point must lie with in (thus accuracy)
+                # bounding_volume = BoundingVolume()
 
-                #create bounding box: target point must lie with in (thus accuracy)
-                bounding_volume = BoundingVolume()
+                # # Ccreate box
+                # box = SolidPrimitive()
+                # box.type = SolidPrimitive.BOX
+                # box.dimensions = [0.005, 0.005, 0.005]  
 
-                # Ccreate box
-                box = SolidPrimitive()
-                box.type = SolidPrimitive.BOX
-                box.dimensions = [0.005, 0.005, 0.005]  
-
-                # Assign the primitive to bounding volume
-                bounding_volume.primitives.append(box)
-                bounding_volume.primitive_poses. append(pose.pose)
+                # # Assign the primitive to bounding volume
+                # bounding_volume.primitives.append(box)
+                # bounding_volume.primitive_poses. append(pose.pose)
 
 
-                pose_constraint.constraint_region = bounding_volume
+                # pose_constraint.constraint_region = bounding_volume
                 
-                #set importance of the constraint
-                pose_constraint.weight = 1.0
+                # #set importance of the constraint
+                # pose_constraint.weight = 1.0
 
-                #set planning
-                # Create planning options
-                planning_options = PlanningOptions()
-                planning_options.plan_only = False  # Set to True if you only want to plan without execution
-                planning_options.look_around = False
-                planning_options.replan = True
-                planning_options.replan_attempts = 5
-                #planning_options.replan_delay = Duration(sec=2, nanosec=0)
+                # #set planning
+                # # Create planning options
+                # planning_options = PlanningOptions()
+                # planning_options.plan_only = False  # Set to True if you only want to plan without execution
+                # planning_options.look_around = False
+                # planning_options.replan = True
+                # planning_options.replan_attempts = 5
+                # #planning_options.replan_delay = Duration(sec=2, nanosec=0)
                 
-                # Create orientation constraint
-                orientation_constraint = OrientationConstraint()
-                orientation_constraint.header.frame_id = self.reference_frame
-                orientation_constraint.link_name = self.target_frame
-                orientation_constraint.orientation = pose.pose.orientation
-                orientation_constraint.absolute_x_axis_tolerance = 0.01
-                orientation_constraint.absolute_y_axis_tolerance = 0.01
-                orientation_constraint.absolute_z_axis_tolerance = 0.01
-                orientation_constraint.weight = 1.0
+                # # Create orientation constraint
+                # orientation_constraint = OrientationConstraint()
+                # orientation_constraint.header.frame_id = self.reference_frame
+                # orientation_constraint.link_name = self.target_frame
+                # orientation_constraint.orientation = self.current_pose.pose.orientation
+                # orientation_constraint.absolute_x_axis_tolerance = 0.01
+                # orientation_constraint.absolute_y_axis_tolerance = 0.01
+                # orientation_constraint.absolute_z_axis_tolerance = 0.01
+                # orientation_constraint.weight = 1.0
                 
-                #Add goal constraint
-                motion_request.goal_constraints[0].position_constraints.append(pose_constraint)
-                motion_request.goal_constraints[0].orientation_constraints.append(orientation_constraint)
+                # #Add goal constraint
+                # motion_request.goal_constraints[0].position_constraints.append(pose_constraint)
+                # motion_request.goal_constraints[0].orientation_constraints.append(orientation_constraint)
 
-                #Create Path constraint
-                path_constraint = PositionConstraint()
-                path_constraint.header.frame_id = "base_link"  # or your world frame
-                path_constraint.link_name = self.target_frame
-                path_constraint.target_point_offset.x = 0.0
-                path_constraint.target_point_offset.y = 0.0
-                path_constraint.target_point_offset.z = 0.0
-                path_constraint.weight = 1.0
+                # #Create Path constraint
+                # path_constraint = PositionConstraint()
+                # path_constraint.header.frame_id = "base_link"  # or your world frame
+                # path_constraint.link_name = self.target_frame
+                # path_constraint.target_point_offset.x = 0.0
+                # path_constraint.target_point_offset.y = 0.0
+                # path_constraint.target_point_offset.z = 0.0
+                # path_constraint.weight = 1.0
 
-                # Define a very thin box in Z to constrain to XY plane at current Z
-                box = SolidPrimitive()
-                box.type = SolidPrimitive.BOX
-                box.dimensions = [2.0, 2.0, 0.01]  # large XY, thin Z
+                # # Define a very thin box in Z to constrain to XY plane at current Z
+                # box = SolidPrimitive()
+                # box.type = SolidPrimitive.BOX
+                # box.dimensions = [2.0, 2.0, 0.01]  # large XY, thin Z
 
-                box_pose = Pose()
-                box_pose.position.x = self.current_pose.pose.position.x
-                box_pose.position.y = self.current_pose.pose.position.y
-                box_pose.position.z = self.current_pose.pose.position.z  # Z-plane to stay in
-                box_pose.orientation.w = 1.0
+                # box_pose = Pose()
+                # box_pose.position.x = self.current_pose.pose.position.x
+                # box_pose.position.y = self.current_pose.pose.position.y
+                # box_pose.position.z = self.current_pose.pose.position.z  # Z-plane to stay in
+                # box_pose.orientation.w = 1.0
 
-                bounding_volume = BoundingVolume()
-                bounding_volume.primitives.append(box)
-                bounding_volume.primitive_poses.append(box_pose)
+                # bounding_volume = BoundingVolume()
+                # bounding_volume.primitives.append(box)
+                # bounding_volume.primitive_poses.append(box_pose)
 
-                path_constraint.constraint_region = bounding_volume
+                # #path_constraint.constraint_region = bounding_volume
 
-                #apply path constraint
-                motion_request.path_constraints[0].position_constraints.append(path_constraint)
+                # #apply path constraint
+                # #motion_request.path_constraints[0].position_constraints.append(path_constraint)
 
 
-                # Create the goal message
-                goal_msg = MoveGroup.Goal()
-                goal_msg.request = motion_request
-                goal_msg.planning_options = planning_options
+                # # Create the goal message
+                # goal_msg = MoveGroup.Goal()
+                # goal_msg.request = motion_request
+                # goal_msg.planning_options = planning_options
+                goal_msg = self.setup_params(self.keyboard_offsets, key_input)
 
                 #Send goal
                 while not self.succeed:
                     self.send_goal(goal_msg, key_input)
                     while not self.is_done:
                         continue
+                self.succeed = False
+                self.is_done = False
+                
+                goal_msg = self.setup_params(self.keyboard_offsets_inverse, key_input)
+
+                while not self.succeed:
+                    self.send_goal(goal_msg, key_input)
+                    while not self.is_done:
+                        continue
+                self.succeed = False
+                self.is_done = False
+
+                # i -= 1
+                # if i <= 0:
+                #     break
             else:
                 self.get_logger().warn(f"Unknown command: '{key_input}'")
+
+    def push_key(self):
+        return
 
     def send_goal(self, goal_msg, key_input):
          #Send goal
@@ -217,7 +262,9 @@ class GripperMoveNode(Node):
         send_goal_future = self.move_group_client.send_goal_async(goal_msg)
         self.get_logger().info("sent")
         send_goal_future.add_done_callback(self.moving_callback)
-        
+        while not self.is_done:
+            rclpy.spin_once(self)
+        self.get_logger().info("callback added")
     
     def moving_callback(self, future):
         self.get_logger().info("in call back")
@@ -231,9 +278,10 @@ class GripperMoveNode(Node):
         # Get the result
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(self.get_result_callback)
+
     
     def get_result_callback(self, future):
-        result_handle = future.result().result()
+        result_handle = future.result()
         status = future.result().status
         
         if status == 4:  # Succeeded
@@ -276,11 +324,138 @@ class GripperMoveNode(Node):
         return pose
 
 
+    def setup_params(self, key_dict, key_input):
+        # Create a motion planning request
+                motion_request = MotionPlanRequest()
+                motion_request.workspace_parameters.header.frame_id = self.reference_frame
+                motion_request.workspace_parameters.header.stamp = self.get_clock().now().to_msg()
+                
+                # Set the planning group
+                motion_request.group_name = "rover_arm"
+                
+                # Set start state to the current state
+                motion_request.start_state = RobotState()
+                motion_request.start_state.joint_state.header = self.latest_joint_state.header
+                motion_request.start_state.joint_state.name = self.latest_joint_state.name
+                motion_request.start_state.joint_state.position = self.latest_joint_state.position
+                motion_request.start_state.joint_state.velocity = self.latest_joint_state.velocity
+                
+                #get current pose
+                self.get_pose()
+
+                #Set target pose
+                target_pose = key_dict[key_input]
+                pose = PoseStamped()
+                pose.header.frame_id = self.reference_frame
+                pose.pose = self.add_pose_position(target_pose, self.current_pose.pose)
+                pose.pose.orientation = self.current_pose.pose.orientation
+                self.get_logger().info(f"{pose.pose.position}")
+                #set planning params
+                motion_request.max_velocity_scaling_factor = 0.5
+                motion_request.max_acceleration_scaling_factor = 0.5
+                motion_request.allowed_planning_time = 5.0
+                motion_request.num_planning_attempts = 10
+
+                motion_request.goal_constraints = [Constraints()]
+                #motion_request.path_constraints = [Constraints()]
+
+                #create position contraint
+                pose_constraint = PositionConstraint()
+                pose_constraint.header.frame_id = pose.header.frame_id
+                pose_constraint.link_name = self.target_frame
+                pose_constraint.target_point_offset.x = 0.0
+                pose_constraint.target_point_offset.y = 0.0
+                pose_constraint.target_point_offset.z = 0.0
+
+                #create bounding box: target point must lie with in (thus accuracy)
+                bounding_volume = BoundingVolume()
+
+                # Ccreate box
+                box = SolidPrimitive()
+                box.type = SolidPrimitive.BOX
+                box.dimensions = [0.005, 0.005, 0.005]  
+
+                # Assign the primitive to bounding volume
+                bounding_volume.primitives.append(box)
+                bounding_volume.primitive_poses. append(pose.pose)
+
+
+                pose_constraint.constraint_region = bounding_volume
+                
+                #set importance of the constraint
+                pose_constraint.weight = 1.0
+
+                #set planning
+                # Create planning options
+                planning_options = PlanningOptions()
+                planning_options.plan_only = False  # Set to True if you only want to plan without execution
+                planning_options.look_around = False
+                planning_options.replan = True
+                planning_options.replan_attempts = 5
+                #planning_options.replan_delay = Duration(sec=2, nanosec=0)
+                
+                # Create orientation constraint
+                orientation_constraint = OrientationConstraint()
+                orientation_constraint.header.frame_id = self.reference_frame
+                orientation_constraint.link_name = self.target_frame
+                orientation_constraint.orientation = self.current_pose.pose.orientation
+                orientation_constraint.absolute_x_axis_tolerance = 0.01
+                orientation_constraint.absolute_y_axis_tolerance = 0.01
+                orientation_constraint.absolute_z_axis_tolerance = 0.01
+                orientation_constraint.weight = 1.0
+                
+                #Add goal constraint
+                motion_request.goal_constraints[0].position_constraints.append(pose_constraint)
+                motion_request.goal_constraints[0].orientation_constraints.append(orientation_constraint)
+
+                #Create Path constraint
+                path_constraint = PositionConstraint()
+                path_constraint.header.frame_id = "base_link"  # or your world frame
+                path_constraint.link_name = self.target_frame
+                path_constraint.target_point_offset.x = 0.0
+                path_constraint.target_point_offset.y = 0.0
+                path_constraint.target_point_offset.z = 0.0
+                path_constraint.weight = 1.0
+
+                # Define a very thin box in Z to constrain to XY plane at current Z
+                box = SolidPrimitive()
+                box.type = SolidPrimitive.BOX
+                box.dimensions = [2.0, 2.0, 0.01]  # large XY, thin Z
+
+                box_pose = Pose()
+                box_pose.position.x = self.current_pose.pose.position.x
+                box_pose.position.y = self.current_pose.pose.position.y
+                box_pose.position.z = self.current_pose.pose.position.z  # Z-plane to stay in
+                box_pose.orientation.w = 1.0
+
+                bounding_volume = BoundingVolume()
+                bounding_volume.primitives.append(box)
+                bounding_volume.primitive_poses.append(box_pose)
+
+                #path_constraint.constraint_region = bounding_volume
+
+                #apply path constraint
+                #motion_request.path_constraints[0].position_constraints.append(path_constraint)
+
+
+                # Create the goal message
+                goal_msg = MoveGroup.Goal()
+                goal_msg.request = motion_request
+                goal_msg.planning_options = planning_options
+                return goal_msg
+
+
 def main(args=None):
     rclpy.init(args=args)
-    node = GripperMoveNode()
-    rclpy.spin(node)
-    node.destroy_node()
+    auton_type = GripperMoveNode()
+    while rclpy.ok():
+        if auton_type.is_callback:
+            auton_type.is_callback = False
+            auton_type.text_callback()
+        rclpy.spin_once(auton_type)
+
+
+    auton_type.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':

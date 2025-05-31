@@ -49,7 +49,7 @@ class GripperMoveNode(Node):
         self.keyboard_offsets_inverse = self.inverse_pose(self.keyboard_offsets)
 
         self.push_button = {
-	    "push" :  self.make_pose(0.0, 0.0, 0.05)
+	    "push" :  self.make_pose(0.0, 0.0, 0.05),
 	    "back" :  self.make_pose(0.0, 0.0, -0.05)
 	} #x, y, z for pressing a button
         # self.joint_angle_subscriber = self.create_subscription(
@@ -243,20 +243,20 @@ class GripperMoveNode(Node):
                 
                 goal_msg = self.setup_params(self.push_button, "push")
 		
-		while not self.succeed:
-                    self.send_goal(goal_msg, push)
-		    while not self.is_done:
-			continue
-		self.succeed = False
-		self.is_done = False
-		
-		goal_msg = self.setup_params(self.push_button, "back")
-		while not self.succeed: 
-		    self.send_goal(goal_msg, push)
-		    while not self.is_done:
-		        continue
-		self.succeed = False
-		self.succeed = False
+                while not self.succeed:
+                    self.send_goal(goal_msg, "push")
+                    while not self.is_done:
+                        continue
+                self.succeed = False
+                self.is_done = False
+                
+                goal_msg = self.setup_params(self.push_button, "back")
+                while not self.succeed: 
+                    self.send_goal(goal_msg, "back")
+                    while not self.is_done:
+                        continue
+                self.succeed = False
+                self.succeed = False
 		
 		
                 while not self.succeed:

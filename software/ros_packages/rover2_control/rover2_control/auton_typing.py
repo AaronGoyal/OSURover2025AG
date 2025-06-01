@@ -32,8 +32,7 @@ class GripperMoveNode(Node):
         self.get_logger().info('Waiting for MoveGroup action server...')
         self.move_group_client.wait_for_server()
         self.get_logger().info('MoveGroup action server connected!')
-        self.joint_names = ['base_joint', 'shoulder_joint', 'elbow_pitch_joint', 
-                  'elbow_roll_joint', 'wrist_pitch_joint', 'wrist_roll_joint'] #probaly not needed
+        #set robot frames
         self.target_frame = "arm_gripper"
         self.reference_frame = "base_link"
         # Subscribe to current joint states for getting the current robot state
@@ -43,20 +42,21 @@ class GripperMoveNode(Node):
             self.joint_states_callback,
             10)
         self.keyboard_offsets = {
-            "q" : self.make_pose(0.05,0.0,0.0),
-            "w" : self.make_pose(-0.05, 0.0, 0.0),
+            "q" : [0.05,0.0,0.0],
+            "w" : [-0.05, 0.0, 0.0],
         }
+        self.keyboard_offsets = self.make_pose(self.keyboard_offsets)
+        #self.get_logger().info(self.keyboard_offsets)
+
         self.keyboard_offsets_inverse = self.inverse_pose(self.keyboard_offsets)
 
         self.push_button = {
-	    "push" :  self.make_pose(0.0, 0.0, 0.05),
-	    "back" :  self.make_pose(0.0, 0.0, -0.05)
-	} #x, y, z for pressing a button
-        # self.joint_angle_subscriber = self.create_subscription(
-        #     Float32MultiArray,
-        #     '/set_joint_angles',
-        #     self.move_to_joint_positions,
-        #     10)
+	    "push" :  [0.0, 0.0, 0.05],
+	    "back" :  [0.0, 0.0, -0.05]
+      
+	    } #x, y, z for pressing a button
+        self.push_button = self.make_pose(self.push_button)
+
         self.latest_joint_state = None
 
         # Subscribe to the string command topic
@@ -67,10 +67,11 @@ class GripperMoveNode(Node):
             10
         )
         self.current_pose = None
+        self.command = ""
+        #set up control booleans
         self.is_done = False
         self.succeed = False
         self.is_callback = False
-        self.command = ""
 
         self.get_logger().info('GripperMoveNode is ready.')
 
@@ -92,16 +93,22 @@ class GripperMoveNode(Node):
 
         return new_dict  
 
-    def make_pose(self, x, y, z):
-        pose = Pose()
-        pose.position.x = x
-        pose.position.y = y
-        pose.position.z = z
-        pose.orientation.x = -0.7071068
-        pose.orientation.y = 0.0
-        pose.orientation.z = 0.0
-        pose.orientation.w = 0.7071068  # Neutral orientation
-        return pose
+    def make_pose(self, pose_dict):
+        for key in pose_dict:
+            pose = Pose()
+            #set array to x,y,z pose positions
+            pose.position.x = pose_dict[key][0]
+            pose.position.y = pose_dict[key][1]
+            pose.position.z = pose_dict[key][2]
+            #Set pose at 90 degree rotation along x
+            pose.orientation.x = -0.7071068
+            pose.orientation.y = 0.0
+            pose.orientation.z = 0.0
+            pose.orientation.w = 0.7071068  # Neutral orientation
+            pose_dict[key] = pose
+        return pose_dict
+
+    
     def set_callback_flag(self, msg):
         self.is_callback = True
         self.command = msg.data.lower().strip()

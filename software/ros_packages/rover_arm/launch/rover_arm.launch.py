@@ -74,16 +74,27 @@ def generate_launch_description():
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
         .sensors_3d(file_path="config/sensors_3d.yaml")
         .planning_pipelines(
-            pipelines=["ompl", "pilz_industrial_motion_planner"]
+            pipelines=["ompl", "pilz_industrial_motion_planner", "chomp_interface"],
+            load_all=False
         )
         .to_moveit_configs()
     )
-
+    planner_plugins = load_yaml(
+        "rover_arm", "config/planner_plugins.yaml"
+    )
+    planner_configs = load_yaml(
+        "rover_arm", "config/planner_configs.yaml"
+    )
+    chomp_configs = load_yaml(
+        "rover_arm", "config/chomp_interface_planner.yaml"
+    )
     move_group_node = Node(
         package="moveit_ros_move_group", 
         executable="move_group",
         output="screen", 
         parameters=[
+            planner_plugins,
+            planner_configs,
             moveit_config.to_dict(),
             {
                 "octomap_frame": "base_link",

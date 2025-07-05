@@ -19,7 +19,8 @@ endif()
 find_package(ament_cmake REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
-# find_package(<dependency> REQUIRED)
+
+find_package(builtin_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -33,6 +34,10 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RoverSysStatus.msg"
   "msg/WheelStatuses.msg"
   "msg/LED.msg"
+  #"msg/ODriveStatus.msg"
+  #"msg/TractionStatus.msg"
+  
+  DEPENDENCIES builtin_interfaces
 )
 
 ament_export_dependencies(rosidl_default_runtime)

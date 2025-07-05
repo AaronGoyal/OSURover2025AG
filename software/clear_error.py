@@ -2,8 +2,10 @@
 import struct
 import can
 import cv2
+import sys
 
-bus = can.interface.Bus("can1", interface="socketcan")
+can_net = sys.argv[1]
+bus = can.interface.Bus(can_net, interface="socketcan")
 
 # Flush CAN RX buffer so there are no more old pending messages
 while not (bus.recv(timeout=0) is None): pass

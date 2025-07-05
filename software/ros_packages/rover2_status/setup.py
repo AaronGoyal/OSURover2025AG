@@ -11,7 +11,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name, glob('launch/*launch.[pxy][yma]*'))
+        ('share/' + package_name + '/launch', glob('launch/*launch.[pxy][yma]*'))
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -23,7 +23,10 @@ setup(
     entry_points={
         'console_scripts': [
             'system_statuses_node = rover2_status.system_statuses_node:main',
-            'led_node = rover2_status.led_node:main'
+            'led_node = rover2_status.led_node:main',
+            'drivetrain_telemetry = rover2_status.odrive_telemetry:drivetrain_telem',
+            'arm_telem = rover2_status.odrive_telemetry:arm_telem',
+            'drive_slip = rover2_status.drive_slip_detection:main'
         ],
     },
 )

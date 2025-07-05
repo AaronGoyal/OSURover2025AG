@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import struct
 import can
 import cv2
@@ -5,6 +7,7 @@ import matplotlib.pyplot as plt
 from rich.live import Live
 from rich.table import Table
 import math
+import sys
 
 odrive_errors_by_code = {
     "0": "NO ERROR",
@@ -40,7 +43,8 @@ node_motor_temp =  [0,0,0,0,0,0,0]
 node_error_msg =[(0,0) for i in range(len(nodes)+1)]
 node_velocity =  [0,0,0,0,0,0,0]
 node_position =   [0,0,0,0,0,0,0]
-bus = can.interface.Bus("can1", interface="socketcan")
+can_network = sys.argv[1]
+bus = can.interface.Bus(can_network, interface="socketcan")
 node_iq_setpoint =   [0,0,0,0,0,0,0]
 node_iq_measured =   [0,0,0,0,0,0,0]
 # Flush CAN RX buffer so there are no more old pending messages

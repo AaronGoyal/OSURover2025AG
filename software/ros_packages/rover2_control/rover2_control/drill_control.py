@@ -15,6 +15,7 @@ NODE_ID = 6
 class DrillControl(Node):
 
     def __init__(self):
+        self.position = 500
         super().__init__('drill_control')
         self.subscription = self.create_subscription(
             Float32,
@@ -27,7 +28,7 @@ class DrillControl(Node):
             self.compartment_callback,
             10)
         self.subscription  # prevent unused variable warning
-        self.arduino = serial.Serial(port="/dev/ttyACM0",baudrate=9600, timeout=0.1)
+        self.arduino = serial.Serial(port="/dev/ttyACM0",baudrate=9600, write_timeout=0)
         self.bus = can.interface.Bus("can1", interface="socketcan")
         # Flush CAN RX buffer so there are no more old pending messages
         while not (self.bus.recv(timeout=0) is None): pass
@@ -52,25 +53,33 @@ class DrillControl(Node):
         ))
 
 
-        self.bus.send(can.Message(
-        arbitration_id=(NODE_ID << 5 | 0x0d), # 0x0d: Set_Input_Vel
-        data=struct.pack('<ff', 0, 0.0), # 1.0: velocity, 0.0: torque feedforward
-        is_extended_id=False
-        ))
+#        self.bus.send(can.Message(
+#        arbitration_id=(NODE_ID << 5 | 0x0d), # 0x0d: Set_Input_Vel
+#        data=struct.pack('<ff', 0.0, 0.0), # 1.0: velocity, 0.0: torque feedforward
+#        is_extended_id=False
+#        ))
+        self.velocity = 0
+        self.timer = self.create_timer(0.1, self.timer_callback)
+
 
     def listener_callback(self, msg):
         self.get_logger().info('I heard: "%s"' % msg.data)
-        velocity = msg.data * -1 * GEAR_RATIO
+        self.velocity = msg.data * -1 * GEAR_RATIO
 
+
+
+    def timer_callback(self):
+        self.arduino.write(bytes(str(self.position),'utf-8'))
         self.bus.send(can.Message(
         arbitration_id=(NODE_ID << 5 | 0x0d), # 0x0d: Set_Input_Vel
-        data=struct.pack('<ff', velocity, 0.0), # 1.0: velocity, 0.0: torque feedforward
+        data=struct.pack('<ff', self.velocity, 0.0), # 1.0: velocity, 0.0: torque feedforward
         is_extended_id=False
         ))
 
+        
     def compartment_callback(self,msg):
-        print("Write arduino")
-        self.arduino.write(bytes(str(msg.data),'utf-8'))
+        self.position = msg.data
+
 
 def main(args=None):
     rclpy.init(args=args)

@@ -1,7 +1,7 @@
 sudo modprobe can
 sudo modprobe can_raw
 sudo modprobe mttcan
-
+sudo mount /dev/sda1 /media/makemorerobot/363A-4167
 sudo ip link set can0 down
 sleep 1
 sudo ip link set can1 down

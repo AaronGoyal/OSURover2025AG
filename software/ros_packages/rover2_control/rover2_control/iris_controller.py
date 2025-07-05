@@ -25,6 +25,7 @@ DEFAULT_BAUD = 115200
 DEFAULT_DRIVE_COMMAND_TOPIC = "command_control/iris_drive"
 DEFAULT_IRIS_STATUS_TOPIC = "iris_status"
 DEFAULT_JOY_COMMAND_TOPIC = "joy"
+DEFAULT_JOY2_COMMAND_TOPIC = "joy2"
 DEFAULT_ARM_POSE_COMMAND_TOPIC = "set_joint_angles"
 
 
@@ -103,6 +104,7 @@ class IrisController(Node):
         self.drive_command_publisher_topic = self.declare_parameter('~drive_command_topic', DEFAULT_DRIVE_COMMAND_TOPIC).value
         self.iris_status_publisher_topic = self.declare_parameter('~iris_status_topic', DEFAULT_IRIS_STATUS_TOPIC).value
         self.joy_command_publisher_topic = self.declare_parameter('~joy_command_topic', DEFAULT_JOY_COMMAND_TOPIC).value
+        self.joy2_command_publisher_topic = self.declare_parameter('~joy2_command_topic', DEFAULT_JOY2_COMMAND_TOPIC).value
         self.arm_pose_command_publisher_topic = self.declare_parameter('~arm_pose_command_topic', DEFAULT_ARM_POSE_COMMAND_TOPIC).value
 
         self.wait_time = 1.0 / self.declare_parameter('~hertz', DEFAULT_HERTZ).value
@@ -113,6 +115,7 @@ class IrisController(Node):
         self.drive_command_publisher = self.create_publisher(DriveCommandMessage, self.drive_command_publisher_topic, 1)
         self.iris_status_publisher = self.create_publisher(IrisStatusMessage, self.iris_status_publisher_topic, 1)
         self.joy_command_publisher = self.create_publisher(Joy,self.joy_command_publisher_topic, 1)
+        self.joy2_command_publisher = self.create_publisher(Joy,self.joy2_command_publisher_topic, 1)
         self.arm_pose_command_publisher = self.create_publisher(Float32MultiArray,self.arm_pose_command_publisher_topic, 1)
        
 
@@ -166,9 +169,9 @@ class IrisController(Node):
             command = DriveCommandMessage()
             print("Drive command")
             left_y_axis = self.registers[MODBUS_REGISTERS["LEFT_STICK_Y_AXIS"]]
-            right_y_axis = self.registers[MODBUS_REGISTERS["RIGHT_STICK_Y_AXIS"]]
+            right_x_axis = self.registers[MODBUS_REGISTERS["RIGHT_STICK_X_AXIS"]]
             
-            if left_y_axis == 0 and right_y_axis == 0:
+            if left_y_axis == 0 and right_x_axis == 0:
                 command.controller_present = False
                 command.ignore_drive_control = True
                 command.drive_twist.linear.x = 0.0
@@ -179,12 +182,12 @@ class IrisController(Node):
                 left = (left_y_axis - SBUS_VALUES["SBUS_MID"]) / SBUS_VALUES[
                     "SBUS_RANGE"]
 
-                right = (right_y_axis - SBUS_VALUES["SBUS_MID"]) / SBUS_VALUES[
+                right = (right_x_axis - SBUS_VALUES["SBUS_MID"]) / SBUS_VALUES[
                     "SBUS_RANGE"]
 
                 command.controller_present = True
-                command.drive_twist.linear.x = (left + right) / 2.0
-                command.drive_twist.angular.z = (right - left) / 2.0
+                command.drive_twist.linear.x = left
+                command.drive_twist.angular.z = -right
                 if abs(command.drive_twist.linear.x) < 0.025:
                     command.drive_twist.linear.x = 0.0
                 if abs(command.drive_twist.angular.z) < 0.025:
@@ -254,7 +257,7 @@ class IrisController(Node):
                 right_y_axis = self.registers[MODBUS_REGISTERS["RIGHT_STICK_Y_AXIS"]]
                 left_x_axis = self.registers[MODBUS_REGISTERS["LEFT_STICK_X_AXIS"]]
                 right_x_axis = self.registers[MODBUS_REGISTERS["RIGHT_STICK_X_AXIS"]]
-                axes = [left_x_axis,left_y_axis,0.0 ,right_x_axis,right_y_axis, 0.0, 0.0, 0.0]
+                axes = [left_x_axis,left_y_axis, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
                 buttons = [0]*16
                 difference = SBUS_VALUES["SBUS_MID"]-SBUS_VALUES["SBUS_MIN"]
                 for i in range(len(axes)):
@@ -274,6 +277,13 @@ class IrisController(Node):
         msg.axes = axes
         msg.buttons = buttons
         self.joy_command_publisher.publish(msg)
+    def publish_joy2_msg(self,axes,buttons):
+        msg = Joy()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.axes = axes
+        msg.buttons = buttons
+        self.joy2_command_publisher.publish(msg)
+        
 
     def broadcast_arm_change_controller(self):
         buttons = [0 for _ in range(16)]
@@ -283,20 +293,20 @@ class IrisController(Node):
        
         if self.registers[MODBUS_REGISTERS[REGISTER_STATE_MAPPING["POSE_VS_IK_CONTROL"]]] > SBUS_VALUES["SBUS_MID"] and not self.published_pose_controller:
             print("Change controller")
-            self.publish_joy_msg(axes,buttons)
-            self.publish_joy_msg(axes,buttons_default) # This is needed for the controller switcher, as it will only start to look for a switch if the button it is mapped to has changed between inputs
+            self.publish_joy2_msg(axes,buttons)
+            self.publish_joy2_msg(axes,buttons_default) # This is needed for the controller switcher, as it will only start to look for a switch if the button it is mapped to has changed between inputs
             sleep(0.5)
             self.published_pose_controller = True
             self.published_ik_controller = False            
-        """
+        
         elif self.registers[MODBUS_REGISTERS[REGISTER_STATE_MAPPING["POSE_VS_IK_CONTROL"]]] < SBUS_VALUES["SBUS_MID"] and not self.published_ik_controller:            
             print("Change controller ik")
-            self.publish_joy_msg(axes,buttons)
-            self.publish_joy_msg(axes,buttons_default) # This is needed for the controller switcher, as it will only start to look for a switch if the button it is mapped to has changed between inputs
+            self.publish_joy2_msg(axes,buttons)
+            self.publish_joy2_msg(axes,buttons_default) # This is needed for the controller switcher, as it will only start to look for a switch if the button it is mapped to has changed between inputs
             sleep(0.5)
             self.published_pose_controller = False
             self.published_ik_controller = True
-        """
+        
 
     def broadcast_iris_status(self):
         status_message = IrisStatusMessage()

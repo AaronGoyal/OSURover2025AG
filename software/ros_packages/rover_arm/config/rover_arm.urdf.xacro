@@ -8,8 +8,6 @@
 
     <!-- Import control_xacro -->
     <xacro:include filename="rover_arm.ros2_control.xacro" />
-
-    
     <!--Import camera-->
     <!-- Include sensors and other links -->
     <xacro:include filename="$(find realsense2_description)/urdf/_d405.urdf.xacro"/>

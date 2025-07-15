@@ -16,6 +16,22 @@
       </geometry>
     </collision>
   </link>
+
+  <link name="rover_body">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rover_arm_urdf/urdf/stl_files/rover_body.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://rover_arm_urdf/urdf/stl_files/rover_body.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
   
   <link name="arm_link_0">
     <visual>
@@ -120,9 +136,9 @@
       </geometry>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="-0.038106 0.015875 0.14921"/>
+      <origin rpy="1.57079632679 0 0" xyz="0 0 0"/> <!-- (-0.038106 0.015875 0.14921) 2021 old gripper-->
       <geometry>
-        <mesh filename="package://rover_arm_urdf/urdf/stl_files/arm_gripper.stl"/>
+        <mesh filename="package://rover_arm_urdf/urdf/stl_files/arm_1819_gripper.stl" scale="0.001 0.001 0.001"/> <!--Get rid of scale for 2021 old griper-->
       </geometry>
     </collision>
     <inertial>
@@ -139,6 +155,12 @@
     <origin rpy="0 0 0" xyz="0 0.055 0.087245"/>
     <axis xyz="0 0 -1"/>
     <limit effort="1000.0" lower="-1.57079632679" upper="1.57079632679" velocity="6.0"/>
+  </joint>
+
+  <joint name="rover_body_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="rover_body"/>
+    <origin rpy="0 0 3.1415926" xyz="0 0.084615 -0.03175"/>
   </joint>
 
   <joint name="shoulder_joint" type="revolute">

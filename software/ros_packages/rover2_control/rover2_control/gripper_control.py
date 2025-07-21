@@ -78,9 +78,11 @@ class GripperCanControl(Node):
                 self.get_logger().info("out of position")
                 self.send_position(self.pos_setpoint)
         #handle going to torque mode
-        # **TOO DO** Handle object Slipping
         elif self.mode == 1:
-            if self.current < self.current_threshold:
+            if self.current_vel > 0.5:
+                self.set_mode(3)
+                self.send_position(self.current_pos)
+            elif self.current < self.current_threshold:
                 self.send_torque(self.torq_setpoint)
         #Handle Velocity Mode
         elif self.mode == 2:

@@ -71,6 +71,17 @@ def generate_launch_description():
         output='screen'
     )
 
+    gripper_can_control_node = Node(
+        package='rover2_control',
+        executable='gripper_control',
+        name='gripper_can_control',
+        parameters=[{
+            'is_position_control': False,
+            'joy_publish_rate': 50
+        }],
+        **config
+    )
+
     return LaunchDescription([
         # Robot State Publisher
         
@@ -142,4 +153,5 @@ def generate_launch_description():
             }],
             **config
         ),
+        gripper_can_control_node,
     ])

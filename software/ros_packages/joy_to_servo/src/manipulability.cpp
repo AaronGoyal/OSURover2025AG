@@ -10,17 +10,17 @@ public:
   ManipulabilityNode()
   : Node("manipulability_node")
   {
-    robot_model_loader_ = std::make_shared<robot_model_loader::RobotModelLoader>(this->get_node_base_interface(), this->get_node_parameters_interface(), "robot_description");
-    robot_model_ = robot_model_loader_->getModel();
+    // robot_model_loader_ = std::make_shared<robot_model_loader::RobotModelLoader>(this->get_node_base_interface(), this->get_node_parameters_interface(), "robot_description");
+    // robot_model_ = robot_model_loader_->getModel();
 
-    if (!robot_model_)
-    {
-      RCLCPP_ERROR(get_logger(), "Failed to load robot model");
-      return;
-    }
+    // if (!robot_model_)
+    // {
+    //   RCLCPP_ERROR(get_logger(), "Failed to load robot model");
+    //   return;
+    // }
 
-    robot_state_ = std::make_shared<moveit::core::RobotState>(robot_model_);
-    joint_model_group_ = robot_model_->getJointModelGroup("your_arm_group_name");
+    // robot_state_ = std::make_shared<moveit::core::RobotState>(robot_model_);
+    // joint_model_group_ = robot_model_->getJointModelGroup("your_arm_group_name");
 
     timer_ = this->create_wall_timer(
       std::chrono::milliseconds(100), std::bind(&ManipulabilityNode::computeManipulability, this));

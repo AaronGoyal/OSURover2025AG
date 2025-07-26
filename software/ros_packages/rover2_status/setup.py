@@ -26,7 +26,15 @@ setup(
             'led_node = rover2_status.led_node:main',
             'drivetrain_telemetry = rover2_status.odrive_telemetry:drivetrain_telem',
             'arm_telem = rover2_status.odrive_telemetry:arm_telem',
-            'drive_slip = rover2_status.drive_slip_detection:main'
+            'drive_slip = rover2_status.drive_slip_detection:main',
+            'node_topic_detector = rover2_status.node_topic_detector:main',
+            'latency = rover2_status.latency:main',
+            'node_info = rover2_status.node_info:main',
+                        'node_log = rover2_status.node_logs:main',
+            'integrator = rover2_status.integrator:main',
+
+            'moveit_logger = rover2_status.moveit_logger:main',
+
         ],
     },
 )

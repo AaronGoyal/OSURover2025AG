@@ -68,7 +68,7 @@ class GripperCanControl(Node):
         self.close_button = 2
 
         #setup can
-        self.bus = can.interface.Bus(channel='can0', bustype='socketcan')
+        self.bus = can.interface.Bus(channel='can1', bustype='socketcan')
         self.can_timer = self.create_timer(0.005, self.read_can)
         while not (self.bus.recv(timeout=0) is None): pass
         #set up joy

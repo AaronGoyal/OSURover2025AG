@@ -228,7 +228,7 @@ def drivetrain_telem(args = None):
 #Used for ODrives on the Arm (can1) network:
 def arm_telem(args = None):
 	rclpy.init()
-	odrive_telem = ODriveTelemetry("can1")
+	odrive_telem = OdriveTelemetry("can1")
 	rclpy.spin(odrive_telem)
 	rclpy.shutdown
 

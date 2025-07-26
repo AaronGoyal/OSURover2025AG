@@ -23,6 +23,10 @@ def generate_launch_description():
         package='rover2_control',
         executable='gripper_control',
         name='gripper_can_control',
+        parameters=[{
+            'is_position_control': False,
+            'joy_publish_rate': 50
+        }],
         **config
     )
     joy_node = Node(

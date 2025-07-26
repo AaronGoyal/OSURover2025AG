@@ -27,17 +27,10 @@ class DriveCanControlNode(Node):
     def __init__(self):
         super().__init__('drive_can_control_node')
 
+        #Initialize class variables for desired velocities
         self.linear_velocity = 0
         self.angular_velocity = 0
-        self.prev_linear_velocity = 0
-        self.prev_angular_velocity = 0
-   
-        # Publisher for left and right wheel velocities
-        #----
-        #self.right_wheel_pub = self.create_publisher(Float64MultiArray, '/right_wheel_controller/commands', 10.0)
-        #----
-        
-# Subscriber to joy topic
+
         while not (BUS.recv(timeout=0) is None): pass
  
         self.setup_controller()
@@ -54,8 +47,8 @@ class DriveCanControlNode(Node):
             self.iris_drive_command_callback,
             1
         )
-        print("test")
-        self.timer = self.create_timer(0.1, self.timer_callback)
+
+        self.timer = self.create_timer(0.02, self.timer_callback)
         self.last_message_time = time()
 
     def sigmoid(self, x):
@@ -83,23 +76,21 @@ class DriveCanControlNode(Node):
             ))
 
     def timer_callback(self):
-        print("Time: " + str(time()))
-        print(self.last_message_time+2)
-        if time() <= self.last_message_time+2:
-            self.normalize_drive_commands()    
-        else:
+        #Watchdog to make sure the drive doesn't spin out of control if connection is lost/messages stop being recieved
+        self.get_logger().info(f"Time: {time()}, Last Message Time: {self.last_message_time}")
+        if time() >= self.last_message_time+2:    
             self.linear_velocity = 0.0  # Left joystick vertical axis (forward/backward)
-            self.angular_velocity = 0.0  # Right joystick horizontal axis (turning)         self.normalize_drive_commands()
-            self.normalize_drive_commands()
+            self.angular_velocity = 0.0  # Right joystick horizontal axis (turning)
+        
+        #This handles drivetrain saturation (sigmoid function), and control mixing
+        self.normalize_drive_commands()
 
     def normalize_drive_commands(self):
-                
-        left_velocity = self.sigmoid(self.linear_velocity)
-        right_velocity = self.sigmoid(self.angular_velocity)        
-
-        left_velocity = -1 * (self.linear_velocity - self.angular_velocity) * GEAR_RATIO * RPS_FACTOR 
-        right_velocity = (self.linear_velocity + self.angular_velocity) * GEAR_RATIO * RPS_FACTOR
-        #Logic for stopping if no commands received in time period HERE
+        
+        #Umm actually the sigmoid does something here now henry :)
+        left_velocity = -1 * self.sigmoid(self.linear_velocity - self.angular_velocity) * GEAR_RATIO * RPS_FACTOR 
+        right_velocity = self.sigmoid(self.linear_velocity + self.angular_velocity) * GEAR_RATIO * RPS_FACTOR
+        
         #Logic for sending velocity through can HERE
         for node_id in LEFT_NODES:
             BUS.send(can.Message(
@@ -114,22 +105,17 @@ class DriveCanControlNode(Node):
             data=struct.pack('<ff', right_velocity, 0.0), # 1.0: velocity, 0.0: torque feedforward
             is_extended_id=False
             ))
+
     def groundstation_drive_command_callback(self, msg):
         # Map joystick axes to wheel velocities
         # Assume left stick y-axis for forward/backward and right stick x-axis for turning
-        if msg.controller_present and (abs(msg.drive_twist.linear.x) + abs(msg.drive_twist.angular.z))!=0:
-
+        if msg.controller_present:
+            #Update the desired velocities
             self.linear_velocity = msg.drive_twist.linear.x  # Left joystick vertical axis (forward/backward)
-            self.angular_velocity = msg.drive_twist.angular.z  # Right joystick horizontal axis (turning)         self.normalize_drive_commands()
-#            self.normalize_drive_commands()
-            self.last_message_time = time()
-        else:
-            self.linear_velocity = 0  # Left joystick vertical axis (forward/backward)
-            self.angular_velocity = 0  # Right joystick horizontal axis (turning)         self.normalize_drive_commands()
-#            self.normalize_drive_commands()
+            self.angular_velocity = msg.drive_twist.angular.z  # Right joystick horizontal axis (turning)         self.normalize_drive_commands() 
             
-        # You may want to scale these velocities to suit your needs (e.g., make them faster/slower)
-
+            self.last_message_time = time() #Only update the watchdog timer if we recieve a message and a controller is present
+        
     def iris_drive_command_callback(self, msg):
         # Map joystick axes to wheel velocities
         # Assume left stick y-axis for forward/backward and right stick x-axis for turning

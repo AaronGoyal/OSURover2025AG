@@ -55,10 +55,10 @@ class GripperCanControl(Node):
 
         #Measured values
         self.current = 0.0
-        self.current_pos = 0.0
-        self.current_vel = 0.0
-        self.current_torq = 0.0
-        self.current_torq_setpoint = 0.0
+        self.measured_pos = 0.0
+        self.measured_vel = 0.0
+        self.measured_torq = 0.0
+        self.feedback_torq_setpoint = 0.0
 
         #odrive mode
         self.mode = 0
@@ -92,20 +92,20 @@ class GripperCanControl(Node):
             if not self.found_home:
                 self.set_mode(2)
                 self.send_velocity(self.home_vel)
-            elif abs(self.current_pos - self.pos_setpoint) > 0.02 and self.current_vel < 0.01:
+            elif abs(self.measured_pos - self.pos_setpoint) > 0.02 and self.measured_vel < 0.01:
                 self.send_position(self.home_pos)
         #timeout period of half sec
         elif self.is_position_control:
             # if self.current > self.current_threshold:
             #     self.send_mode(1)
             if self.mode == 1:
-                if abs(self.current_vel) > 0.5 and abs(-self.torq_setpoint - self.current_torq_setpoint) < 0.0001: 
-                    self.get_logger().info(f"Velocity Measured: {self.current_vel}")
+                if abs(self.measured_vel) > 0.5 and abs(-self.torq_setpoint - self.feedback_torq_setpoint) < 0.0001: 
+                    self.get_logger().info(f"Velocity Measured: {self.measured_vel}")
                     #self.set_mode(2)
                     self.send_torque(0.0)
                     self.set_mode(0)
-                elif abs(-self.torq_setpoint - self.current_torq_setpoint) > 0.0001:
-                    self.get_logger().info(f"current: {self.current} |Current Torque Setpoint {self.current_torq_setpoint} | Wanted Torque Setpoint {self.torq_setpoint}")
+                elif abs(-self.torq_setpoint - self.feedback_torq_setpoint) > 0.0001:
+                    self.get_logger().info(f"current: {self.current} |Current Torque Setpoint {self.feedback_torq_setpoint} | Wanted Torque Setpoint {self.torq_setpoint}")
                     self.send_torque(-self.torq_setpoint)
             #self.get_logger().info(f"Current: {self.current}")
             #self.get_logger().info(f"Set Position: {self.pos_setpoint}")
@@ -116,28 +116,28 @@ class GripperCanControl(Node):
                 #self.get_logger().info("No inputs")
                 if self.mode != 3:
                     self.set_mode(3)
-                    self.send_position(self.current_pos)
-                elif abs(self.current_pos - self.pos_setpoint) > 0.02 and self.current_vel < 0.01:
+                    self.send_position(self.measured_pos)
+                elif abs(self.measured_pos - self.pos_setpoint) > 0.02 and self.measured_vel < 0.01:
                     self.send_position(self.pos_setpoint)
             #handle going to torque mode
             elif self.mode == 1:
-                self.get_logger().info(f"current: {self.current} |Current Torque Setpoint {self.current_torq_setpoint} | Wanted Torque Setpoint {self.torq_setpoint}")
-                if abs(self.current_vel) > 0.5 and abs(-self.torq_setpoint - self.current_torq_setpoint) < 0.0001: 
-                    self.get_logger().info(f"Velocity Measured: {self.current_vel}")
+                self.get_logger().info(f"current: {self.current} |Current Torque Setpoint {self.feedback_torq_setpoint} | Wanted Torque Setpoint {self.torq_setpoint}")
+                if abs(self.measured_vel) > 0.5 and abs(-self.torq_setpoint - self.feedback_torq_setpoint) < 0.0001: 
+                    self.get_logger().info(f"Velocity Measured: {self.measured_vel}")
                     #self.set_mode(2)
                     self.send_torque(0.0)
                     self.set_mode(0)
-                elif abs(-self.torq_setpoint - self.current_torq_setpoint) > 0.0001:
+                elif abs(-self.torq_setpoint - self.feedback_torq_setpoint) > 0.0001:
                     self.send_torque(-self.torq_setpoint)
             #Handle Velocity Mode
             elif self.mode == 2:
                 self.send_velocity(self.vel)
             #Handle Position mode:
             elif self.mode == 3:
-                if abs(self.current_pos - self.pos_setpoint) > 0.02 and self.current_vel < 0.01:
+                if abs(self.measured_pos - self.pos_setpoint) > 0.02 and self.measured_vel < 0.01:
                     self.send_position(self.pos_setpoint)
             elif self.mode == 4:
-                if abs(self.current_pos - self.pos_setpoint) > 0.02 and self.current_vel < 0.01:
+                if abs(self.measured_pos - self.pos_setpoint) > 0.02 and self.measured_vel < 0.01:
                     self.send_position(self.pos_setpoint)
 
     def joy_callback(self, msg):
@@ -167,12 +167,12 @@ class GripperCanControl(Node):
                     
                     else:
                         self.get_logger().info("At Threshold")
-                        self.pos_setpoint = self.current_pos
+                        self.pos_setpoint = self.measured_pos
                         self.set_mode(1)
             else:
                 if buttons[self.open_button]: 
                     #ensure we don't go past fully open position
-                    if self.current_pos >= self.home_pos:
+                    if self.measured_pos >= self.home_pos:
                         self.set_mode(3)
                         self.pos_setpoint = self.home_pos
                     #set velocity mode and setpoint
@@ -218,7 +218,7 @@ class GripperCanControl(Node):
             #self.get_logger().info("homing")
             rclpy.spin_once(self, timeout_sec=0.01)
             if self.current > self.home_current_threshold:
-                self.home_pos = self.current_pos + self.home_offset
+                self.home_pos = self.measured_pos + self.home_offset
                 self.found_home = True
                 self.set_mode(3)
                 self.send_position(self.home_pos)
@@ -227,7 +227,7 @@ class GripperCanControl(Node):
 
         while True: 
             rclpy.spin_once(self, timeout_sec=0.01)
-            if abs(self.current_pos - self.home_pos) < 0.04:
+            if abs(self.measured_pos - self.home_pos) < 0.04:
                 self.is_homed = True
                 break
             sleep(0.01)
@@ -458,8 +458,8 @@ class GripperCanControl(Node):
                     case 0x09: #Encoder Estimate of Position/Velocity
                         pos_estimate, vel_estimate = struct.unpack('<ff', bytes(can_msg.data))
                         #self.get_logger().info(f'position: {pos_estimate} | velocity: {vel_estimate}')
-                        self.current_pos = pos_estimate
-                        self.current_vel = vel_estimate
+                        self.measured_pos = pos_estimate
+                        self.measured_vel = vel_estimate
                     
                     case 0x14: #Q Axis motor current set/measured
                         iq_set, iq_measured = struct.unpack('<ff', bytes(can_msg.data))
@@ -469,8 +469,8 @@ class GripperCanControl(Node):
 
                     case 0x1c: #Torque Target/Estimate
                         torque_set, torque_measured = struct.unpack('<ff', bytes(can_msg.data))
-                        self.current_torq = torque_measured
-                        self.current_torq_setpoint =torque_set
+                        self.measured_torq = torque_measured
+                        self.feedback_torq_setpoint =torque_set
                         #self.get_logger().info(f"Torque: {torque_measured} | Torque Set point = {torque_set}")
                     
 

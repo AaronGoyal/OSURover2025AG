@@ -1,3 +1,26 @@
+"""
+Gripper Control Node
+DAM Robotics
+Authors: Jared Northrop
+Year: 2425
+
+
+Gripper control node for grippers using a single odrive motor controllers. Odrive firmware is expected to be 
+on 0.6.10 (Requires changing all 0x04 can messages for different firmware. See Odrive docs on getting id from 
+flat_endpoints.json). 
+
+Notes
+-----
+Position control mode for timer and joy callbacks (v1) is unstable and can cause the odrive to error. Velocity
+mode should be used for these callbacks
+
+Timer and joy callbacks v2 are untested but should be a cleaner way to handle controls. Joy callback v2 only 
+sets the current control state while the timer callback v2 handles control logic and sending commands to can 
+bus. 
+
+Extracting ID from flat endpoints needs to be implemented (not critical). 
+
+"""
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
@@ -17,55 +40,69 @@ class GripperCanControl(Node):
         
         self.declare_parameter('is_position_control', False)
         self.declare_parameter('joy_publish_rate', 30)
+        self.declare_parameter('direction', -1)
+        self.declare_parameter('flat_endpoints', "")
         self.is_position_control = self.get_parameter('is_position_control').value
         self.joy_publish_rate = self.get_parameter('joy_publish_rate').value
+        self.direction = self.get_parameter('direction').value #direction odrive closes
+        self.flat_endpoints = self.get_parameter('flat_endpoints').value #path to flat_enpoints.json
 
         self.nu = 6 #scaling dx value Should be moved there and replaced with gear ratio
-        self.publish_rate = 100
+        self.publish_rate = 100 #[hz]
         #odrive params
         self.node_id = 6
         self.axis = 0
+        self.laser_pin = 10
+        self.lights_pin = 10
 
         #limits
-        self.vel_limit = 60.0
-        self.vel_ramp_rate = 200.0
-        self.current_limit = 6.0
-        self.accel_limit = 200.0
-        self.deccel_limit = 200.0
-        self.vel_scale = 100
-        self.torq_scale = 1000
+        self.vel_limit = 60.0 #[rev/s]
+        self.vel_ramp_rate = 200.0 #[rev/s^2]
+        self.current_limit = 6.0 # [A]
+        self.accel_limit = 100.0 #[rev/s^2]
+        self.deccel_limit = 100.0 #[rev/s^2]
+        self.vel_scale = 100 #Scales velocity feedforward for position mode. See Odrive Docs Set_Position
+        self.torq_scale = 1000 #Scales torque feedforward for position mode. See Odrive Docs Set_Postion
         self.filter_bandwidth = 7 #effectively responsiveness of filtered position (ie acceleration)
 
         #Homing Params
         self.found_home = False
         self.is_homed = False
-        self.home_current_threshold = 3.0
-        self.home_vel = 20.0
-        self.home_pos = 0.0
-        self.home_offset = -26.0
+        self.home_current_threshold = 3.0 #[A]
+        self.home_vel = 20.0 #[rev/s]
+        self.home_pos = 0.0 #[rev]
+        self.home_offset = self.direction * 26.0 # [rev] offset homepostion back so home position isn't at a hardstop
 
         #setpoints
-        self.vel = 0.0
-        self.vel_setpoint = 60.0
-        self.torq_setpoint = 0.03124
-        self.pos_setpoint = 0.0
-        self.current_threshold = 3.5
-        self.current_setpoint = 3.6
+        self.vel = 0.0 #[rev/s] Velocity to send (Timer_callback)
+
+        self.vel_setpoint = 60.0 #[rev/s] Moving velocity setpoint
+        self.torq_setpoint = 0.03124 #[Nm] Holding Torque to Send
+        self.pos_setpoint = 0.0 #[rev] Position to send
+        self.current_threshold = 3.5 #[A] Current threshold to change to torque mode
+        self.current_setpoint = 3.6 #[A] Current setpoint to send. 
         self.dx = self.vel_limit / self.publish_rate * self.nu #unsure how to tune this Needs to be based on velocity limit and publish rate
 
         #Measured values
-        self.current = 0.0
-        self.measured_pos = 0.0
-        self.measured_vel = 0.0
-        self.measured_torq = 0.0
-        self.feedback_torq_setpoint = 0.0
+        self.measured_current = 0.0 #[A]
+        self.measured_pos = 0.0 #[rev]
+        self.measured_vel = 0.0 #[rev/s]
+        self.measured_torq = 0.0 #[Nm]
+        self.feedback_torq_setpoint = 0.0 #[Nm] Odrives can feedback setpoint
 
         #odrive mode
-        self.mode = 0
+        self.mode = 0 #current mode see set_mode() for Details
 
         #joy Mappings
-        self.open_button = 1
+        self.open_button = 1 
         self.close_button = 2
+        self.light_button = 10 #unset
+        self.laser_button = 11 #unset
+
+        #joy states
+        self.controller_state = 0 #controller state. See timer_callback_v2/joy_callback_v2 for Details
+        self.lights = False 
+        self.laser = False
 
         #setup can
         self.bus = can.interface.Bus(channel='can1', bustype='socketcan')
@@ -105,7 +142,7 @@ class GripperCanControl(Node):
                     self.send_torque(0.0)
                     self.set_mode(0)
                 elif abs(-self.torq_setpoint - self.feedback_torq_setpoint) > 0.0001:
-                    self.get_logger().info(f"current: {self.current} |Current Torque Setpoint {self.feedback_torq_setpoint} | Wanted Torque Setpoint {self.torq_setpoint}")
+                    self.get_logger().info(f"current: {self.measured_current} |Current Torque Setpoint {self.feedback_torq_setpoint} | Wanted Torque Setpoint {self.torq_setpoint}")
                     self.send_torque(-self.torq_setpoint)
             #self.get_logger().info(f"Current: {self.current}")
             #self.get_logger().info(f"Set Position: {self.pos_setpoint}")
@@ -121,7 +158,7 @@ class GripperCanControl(Node):
                     self.send_position(self.pos_setpoint)
             #handle going to torque mode
             elif self.mode == 1:
-                self.get_logger().info(f"current: {self.current} |Current Torque Setpoint {self.feedback_torq_setpoint} | Wanted Torque Setpoint {self.torq_setpoint}")
+                self.get_logger().info(f"current: {self.measured_current} |Current Torque Setpoint {self.feedback_torq_setpoint} | Wanted Torque Setpoint {self.torq_setpoint}")
                 if abs(self.measured_vel) > 0.5 and abs(-self.torq_setpoint - self.feedback_torq_setpoint) < 0.0001: 
                     self.get_logger().info(f"Velocity Measured: {self.measured_vel}")
                     #self.set_mode(2)
@@ -139,6 +176,87 @@ class GripperCanControl(Node):
             elif self.mode == 4:
                 if abs(self.measured_pos - self.pos_setpoint) > 0.02 and self.measured_vel < 0.01:
                     self.send_position(self.pos_setpoint)
+
+    def timer_callback_v2(self):
+        """This function handles commanding the current state set by the joy callback to motor controllers.
+
+        This function handles sending commands to the can bus for each gripper state. The Gripper operates in 
+        three states: opening, closing, stopped. Two modes of controlling the gripper can be used: velocity 
+        and position. Upon startup the node will first home the gripper in which case operator commands are 
+        ignored. Commands are sent to the can bus at a frequency of ~100hz. The functions handles controller 
+        timeout and holding an object. 
+        """
+        #Homing
+        if not self.is_homed:
+            if not self.found_home:
+                self.set_mode(2)
+                self.send_velocity(-self.direction * self.home_vel)
+            elif abs(self.measured_pos - self.pos_setpoint) > 0.02 and self.measured_vel < 0.01:
+                self.send_position(self.home_pos)
+        #Position Control Mode
+        elif self.is_position_control:
+            #Time out
+            if abs(time() - self.last_message_time) > 0.25:
+                self.controller_state = 0
+            match self.controller_state:
+                #No input state
+                case 0:
+                    pass
+                #open input state
+                case 1:
+                    #don't go past home
+                    new_setpoint = self.pos_setpoint - self.direction * self.dx
+                    if self.direction * (self.home_pos - new_setpoint) <= 0:
+                        self.set_mode(4)
+                        self.send_position(new_setpoint)
+                #close input state
+                case 2:
+                    #Handle grasping object
+                    if abs(self.measured_current) < self.current_threshold: 
+                        self.set_mode(4)
+                        self.send_position(self.pos_setpoint + self.direction * self.dx)
+                    else:
+                        # Torq setpoint may not be high enough for measured current > current threshold at all times. 
+                        self.set_mode(4)
+                        self.send_position(self.measured_pos, torq_ff=int(self.torq_setpoint * 1000))
+        #Velocity Control mode
+        else:
+            #Time out
+            if abs(time() - self.last_message_time) > 0.25: #Ideally set to some scalar bigger than joy_publish rate
+                self.controller_state = 0
+            match self.controller_state:
+                #No input state
+                case 0:
+                    self.set_mode(2)
+                    self.send_velocity(0.0)
+                #open input state
+                case 1:
+                    #don't go past home
+                    if self.direction * (self.home_pos - self.measured_pos) <= 0:
+                        self.set_mode(2)
+                        self.send_velocity(-self.direction * self.vel_setpoint)
+                    #need to ensure vel_ramp_rate is high enough not to hit the hardstop
+                    else:
+                        self.set_mode(2)
+                        self.send_velocity(0.0)
+                #close input state
+                case 2:
+                    # **TODO** Handle Current
+                    if self.mode == 1:
+                        if abs(self.measured_vel) > 0.5 and abs(-self.torq_setpoint - self.feedback_torq_setpoint) < 0.0001: 
+                            self.get_logger().info(f"Velocity Measured: {self.measured_vel}")
+                            self.send_torque(0.0)
+                            self.set_mode(2)
+                            self.send_velocity(0.0)
+                        elif abs(-self.torq_setpoint - self.feedback_torq_setpoint) > 0.0001:
+                            self.send_torque(-self.torq_setpoint)
+                    elif abs(self.measured_current) > self.current_threshold:
+                        self.set_mode(1)
+                        if abs(-self.torq_setpoint - self.feedback_torq_setpoint) > 0.0001:
+                            self.send_torque(-self.torq_setpoint)
+                    else:
+                        self.set_mode(2)
+                        self.send_velocity(self.direction * self.vel_setpoint)
 
     def joy_callback(self, msg):
         """Handles controller inputs. 
@@ -159,8 +277,8 @@ class GripperCanControl(Node):
                         #self.vel = int(self.vel_setpoint*self.vel_scale)
                     
                 elif buttons[self.close_button]:
-                    self.get_logger().info(f"Joy current: {self.current}")
-                    if abs(self.current) < self.current_threshold and self.mode != 1:
+                    self.get_logger().info(f"Joy current: {self.measured_current}")
+                    if abs(self.measured_current) < self.current_threshold and self.mode != 1:
                         self.set_mode(4)
                         self.pos_setpoint = self.pos_setpoint - self.dx
                         #self.vel = int(-self.vel_setpoint*self.vel_scale)
@@ -182,8 +300,8 @@ class GripperCanControl(Node):
 
                 elif buttons[self.close_button]: 
                     #Check if grasping an object or if the gripper is closed and Hold Torque
-                    self.get_logger().info(f"current: {self.current}")
-                    if abs(self.current) > self.current_threshold:
+                    self.get_logger().info(f"current: {self.measured_current}")
+                    if abs(self.measured_current) > self.current_threshold:
                         self.get_logger().info("setting torque mode")
                         self.set_mode(1)
                     elif self.mode != 1: 
@@ -201,6 +319,28 @@ class GripperCanControl(Node):
 
                     self.vel = 0.0
 
+    def joy_callback_v2(self, msg):
+        """Handles joy inputs. 
+
+        This function takes controller inputs and changes the state of the node. Controller states are as 
+        follows: 0 = Idle/Stopped, 1 = open, 2 = close.  Light and laser states are simply true for on and 
+        false for off. 
+        """
+        self.last_message_time = time()
+        buttons = msg.buttons
+        if buttons[self.open_button]:
+            self.controller_state = 1
+        elif buttons[self.close_button]:
+            self.controller_state = 2
+        else:
+            self.controller_state = 0
+        if buttons[self.light_button]:
+            self.lights = not self.lights
+            #self.set_gpio(self.lights_pin, self.lights)
+        if buttons[self.laser_button]:
+            self.laser = not self.laser
+            #self.set_gpio(self.laser_pin, self.laser)
+
     def setup_controller(self):
         """Initialize controller.
         """
@@ -211,14 +351,18 @@ class GripperCanControl(Node):
 
     def home(self):
         """Find home position by hitting hardstop limit.
+
+        To home the motor is moved in the open direction at a constant velocity until a current threshold is 
+        reached. The current threshold indicates hitting a hardstop limit which is considered the home 
+        position once an offset is applied. The offset adds a buffer so that the hardstop can't be hit. 
         """
         self.get_logger().info("Start Homing Sequence")
         self.set_mode(2) #enable closed loop ramped velocity mode
         while True:
             #self.get_logger().info("homing")
             rclpy.spin_once(self, timeout_sec=0.01)
-            if self.current > self.home_current_threshold:
-                self.home_pos = self.measured_pos + self.home_offset
+            if self.measured_current > self.home_current_threshold:
+                self.home_pos = self.measured_pos - self.direction * self.home_offset
                 self.found_home = True
                 self.set_mode(3)
                 self.send_position(self.home_pos)
@@ -286,6 +430,23 @@ class GripperCanControl(Node):
         ))
         #self.get_logger().info(f"sent position: {pos}")
         self.pos_setpoint = pos
+    
+    def send_gpio(self, pin, state):
+        """Sends a can message to change a gpio pins state
+
+        Parameters
+        ----------
+            pin : uint32
+                The gpio pin to control.
+            state : bool
+                The state to set. 
+        """
+        if True:
+            self.bus.send(can.message(
+                arbitration_id = (self.node_id << 5 | 0x04),
+                data = struct.pack('BHBI?', 1, 653, 0, pin, state),
+                is_extended_id = False
+            ))
 
     def set_mode(self, mode):
         """Sets the desired control mode. 
@@ -376,7 +537,6 @@ class GripperCanControl(Node):
                         data=struct.pack('<ff', self.vel_limit, self.current_limit),
                         is_extended_id = False
                     ))
-                    self.get_logger().info("set trap_traj mode")
                     self.mode = 3
                 case 4: 
                     #Set Cloosed Loop control
@@ -415,10 +575,7 @@ class GripperCanControl(Node):
                         data=struct.pack('<BHBI', 1, 253,0, self.torq_scale), 
                         is_extended_id=False
                     ))
-
-
                     self.mode = 4
-
 
     #Define a callback for watching can messages:
     def read_can(self):
@@ -463,7 +620,7 @@ class GripperCanControl(Node):
                     
                     case 0x14: #Q Axis motor current set/measured
                         iq_set, iq_measured = struct.unpack('<ff', bytes(can_msg.data))
-                        self.current = iq_measured
+                        self.measured_current = iq_measured
 
                         #self.get_logger().info(f"Current: {iq_measured}, Set: {iq_set}")
 
@@ -471,8 +628,7 @@ class GripperCanControl(Node):
                         torque_set, torque_measured = struct.unpack('<ff', bytes(can_msg.data))
                         self.measured_torq = torque_measured
                         self.feedback_torq_setpoint =torque_set
-                        #self.get_logger().info(f"Torque: {torque_measured} | Torque Set point = {torque_set}")
-                    
+                        #self.get_logger().info(f"Torque: {torque_measured} | Torque Set point = {torque_set}") 
 
     #Abstraction for getting all can messages currently in the buffer:
     def get_can_buffer(self):

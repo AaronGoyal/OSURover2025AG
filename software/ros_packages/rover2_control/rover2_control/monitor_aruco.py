@@ -29,7 +29,7 @@ class monitor_aruco(Node):
         self.aruco_params = aruco.DetectorParameters()
         self.detector = aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
 
-        self.create_timer(5.0, self.process_cameras)
+        self.create_timer(1.0, self.process_cameras)
 
     def process_cameras(self):
         for label, cap in self.captures.items():
@@ -59,7 +59,8 @@ def main(args=None):
     # Map of camera labels to device paths
     camera_devices = {
         "infrared": "/dev/video20",
-        "tower": "/dev/video22"
+        "tower": "/dev/video22",
+	"gripper": "/dev/video21"
     }
 
     node = monitor_aruco(camera_devices)

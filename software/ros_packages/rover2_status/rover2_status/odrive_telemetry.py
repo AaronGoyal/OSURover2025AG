@@ -7,7 +7,7 @@ import numpy as np
 
 #Include the custom message definition:
 from rover2_status_interface.msg import ODriveStatus
-
+from std_srvs.srv import SetBool
 #Include the relevant canbus libraries:
 import struct #Used for handling byte arrays
 import can
@@ -52,7 +52,8 @@ class OdriveTelemetry(Node):
 
 		#Create ros2 publisher
 		self.pub = self.create_publisher(ODriveStatus, 'odrive_telem', 10)
-		
+                #Create ros2 service
+		self.srv = self.create_service(SetBool, '/' + bus_name + '_clear_can', self.clear_can_callback)
 		#establish the socketcan object:
 		self.bus_name = bus_name
 		self.bus = can.interface.Bus(bus_name, interface="socketcan")
@@ -98,7 +99,28 @@ class OdriveTelemetry(Node):
 		self.count = 0
 		self.pub.publish(msg)
 
+	def clear_can_callback(self, request, response):
+            nodes = [1,2,3,4,5]
+            #If wanting to clear arm bus
+            if(self.bus_name == "can1"):
+                nodes = [1,2,3,4,5,6]
+            for node_id in nodes:
+                self.bus.send(can.Message(
+                arbitration_id=(node_id << 5 | 0x18), # 0x0d: Clear_errors
+                data=struct.pack('<I', 1), 
+                is_extended_id=False
+                ))
 
+                self.bus.send(can.Message(
+                arbitration_id=(node_id << 5 | 0x07), # Set axis state
+                data=struct.pack('<I', 8), # 8: closed loop control
+                is_extended_id=False
+                ))
+            response.success = True;
+            response.message = self.bus_name + " cleared"
+            
+            return response
+            
 	#Define a callback for watching can messages:
 	def read_can(self):
 		#self.get_logger().info("starting to read msgs")

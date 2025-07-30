@@ -25,7 +25,8 @@ def generate_launch_description():
         name='gripper_can_control',
         parameters=[{
             'is_position_control': False,
-            'joy_publish_rate': 50
+            'joy_publish_rate': 50,
+            'can': "can0"
         }],
         **config
     )

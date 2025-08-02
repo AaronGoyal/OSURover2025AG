@@ -27,33 +27,44 @@ class DriveCanControlNode(Node):
     def __init__(self):
         super().__init__('drive_can_control_node')
 
-        #Initialize class variables for desired velocities
+        #Initialize class variables for command velocities
+        #These are unity/should be constrained to [-1,1]
+        #TODO: Fix drivetrain control inputs so we can command actual velocity in m/s :eyeroll:
         self.linear_velocity = 0
         self.angular_velocity = 0
 
+        #Clear the CAN message buffer at the beginning so we don't get full buffer errors 
         while not (BUS.recv(timeout=0) is None): pass
  
+        #Setup all the ODrives
         self.setup_controller()
 
+        #Groundstation Subscription
+        #TODO: Just make these the Default Twist Message types?? :skull:
         self.groundstation_sub = self.create_subscription(
             DriveCommandMessage,
-            '/command_control/ground_station_drive',  # Topic where joy messages are published
+            '/command_control/ground_station_drive',  # Topic where twist messages are published
             self.groundstation_drive_command_callback,
             10
         )
+
+        #Iris subscription for Taranis
         self.iris_sub = self.create_subscription(
             DriveCommandMessage,
-            '/command_control/iris_drive',  # Topic where joy messages are published
+            '/command_control/iris_drive',  # Topic where twist messages are published
             self.iris_drive_command_callback,
             10
         )
 
+        #Run the drive control at 50hz
         self.timer = self.create_timer(0.02, self.timer_callback)
+
+        #Class variable for the watchdog timeout
         self.last_message_time = time()
 
-    def sigmoid(self, x):
-        return 1 / (1 + math.exp(-x)) - 0.5
-        
+
+    #Function for initializing all ODrive S1s.
+    #Iterates over each node and sets the axis state, control mode (velocity), and velocity ramp Limit
     def setup_controller(self):
         for node_id in NODES:
             BUS.send(can.Message(
@@ -75,23 +86,55 @@ class DriveCanControlNode(Node):
             is_extended_id=False
             ))
 
+
+    #This callback is called as a 50hz loop, as configured on node init.
     def timer_callback(self):
+
         #Watchdog to make sure the drive doesn't spin out of control if connection is lost/messages stop being recieved
-        #self.get_logger().info(f"Time: {time()}, Last Message Time: {self.last_message_time}")
         if time() >= self.last_message_time+2:    
             self.linear_velocity = 0.0  # Left joystick vertical axis (forward/backward)
             self.angular_velocity = 0.0  # Right joystick horizontal axis (turning)
             self.get_logger().info("hit watchdog")
-        #This handles drivetrain saturation (sigmoid function), and control mixing
-        self.get_logger().info(f"linear vel: {self.linear_velocity} | angular velocity: {self.angular_velocity}")
-        self.normalize_drive_commands()
 
-    def normalize_drive_commands(self):
+        #This handles drivetrain saturation, control mixing, and sending messages over CAN
+        self.send_drive_commands()
+
+        #self.get_logger().info(f"Time: {time()}, Last Message Time: {self.last_message_time}")
+        self.get_logger().info(f"linear vel: {self.linear_velocity} | angular velocity: {self.angular_velocity}")
+
+
+    #Callback function for Groundstation Drive commands.
+    def groundstation_drive_command_callback(self, msg):
+        # Map joystick axes to wheel velocities
+        # Assume left stick y-axis for forward/backward and right stick x-axis for turning
+        self.get_logger().info(f"Recieved: Lin Vel: {msg.drive_twist.linear.x}, ang vel: {msg.drive_twist.angular.z}")
+        if msg.controller_present:
+            #Update the desired velocities
+            self.linear_velocity = msg.drive_twist.linear.x  # Left joystick vertical axis (forward/backward)
+            self.angular_velocity = msg.drive_twist.angular.z  # Right joystick horizontal axis (turning)         self.send_drive_commands() 
+            
+            self.last_message_time = time() #Only update the watchdog timer if we recieve a message and a controller is present
+
+
+    #Callback Function for Drive commands from Iris, which recieves commands over SBUS from Taranis   
+    def iris_drive_command_callback(self, msg):
+        # Map joystick axes to wheel velocities
+        # Assume left stick y-axis for forward/backward and right stick x-axis for turning
+        if msg.controller_present:
+
+            self.linear_velocity = msg.drive_twist.linear.x  # Left joystick vertical axis (forward/backward)
+            self.angular_velocity = msg.drive_twist.angular.z  # Right joystick horizontal axis (turning)
+            self.send_drive_commands()
+            # You may want to scale these velocities to suit your needs (e.g., make them faster/slower)
+            self.last_message_time = time()
+
+
+    #This computes and sends the drive commands
+    def send_drive_commands(self):
         
-        #Umm actually the sigmoid does something here now henry :)
-        left_velocity = -1 * self.sigmoid(self.linear_velocity - self.angular_velocity) * GEAR_RATIO * RPS_FACTOR 
-        right_velocity = self.sigmoid(self.linear_velocity + self.angular_velocity) * GEAR_RATIO * RPS_FACTOR
-        
+        #Get the left, right command velocities
+        left_velocity, right_velocity = self.compute_drive_sides()
+
         #Logic for sending velocity through can HERE
         for node_id in LEFT_NODES:
             BUS.send(can.Message(
@@ -107,27 +150,27 @@ class DriveCanControlNode(Node):
             is_extended_id=False
             ))
 
-    def groundstation_drive_command_callback(self, msg):
-        # Map joystick axes to wheel velocities
-        # Assume left stick y-axis for forward/backward and right stick x-axis for turning
-        self.get_logger().info(f"Recieved: Lin Vel: {msg.drive_twist.linear.x}, ang vel: {msg.drive_twist.angular.z}")
-        if msg.controller_present:
-            #Update the desired velocities
-            self.linear_velocity = msg.drive_twist.linear.x  # Left joystick vertical axis (forward/backward)
-            self.angular_velocity = msg.drive_twist.angular.z  # Right joystick horizontal axis (turning)         self.normalize_drive_commands() 
-            
-            self.last_message_time = time() #Only update the watchdog timer if we recieve a message and a controller is present
-        
-    def iris_drive_command_callback(self, msg):
-        # Map joystick axes to wheel velocities
-        # Assume left stick y-axis for forward/backward and right stick x-axis for turning
-        if msg.controller_present:
 
-            self.linear_velocity = msg.drive_twist.linear.x  # Left joystick vertical axis (forward/backward)
-            self.angular_velocity = msg.drive_twist.angular.z  # Right joystick horizontal axis (turning)
-            self.normalize_drive_commands()
-            # You may want to scale these velocities to suit your needs (e.g., make them faster/slower)
-            self.last_message_time = time()
+    #Function to compute the actual Differential drive commanded speeds from the forward/angular velocity intput
+    def compute_drive_sides(self):
+
+        #Compute the left and right speeds from commanded values 
+        left_command = -1 * (self.linear_velocity - self.angular_velocity) 
+        right_command = (self.linear_velocity + self.angular_velocity)
+
+        #Normalize the speeds
+        #Copied from/Inspired by WPILib Differential Drive normalization
+        max_input = max(self.linear_velocity,self.angular_velocity)
+        saturation_factor = (self.linear_velocity+self.angular_velocity)/max_input
+
+        left_norm = left_command/saturation_factor
+        right_norm = right_command/saturation_factor
+
+        #Scale the Drive speeds from unity accordingly
+        left_velocity = RPS_FACTOR * GEAR_RATIO * left_norm
+        right_velocity = RPS_FACTOR * GEAR_RATIO * right_norm
+
+        return left_velocity, right_velocity
 
 
 def main(args=None):

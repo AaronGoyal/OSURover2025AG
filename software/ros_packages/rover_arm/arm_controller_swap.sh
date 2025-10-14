@@ -1,0 +1,2 @@
+ros2 control set_controller_state rover_arm_controller active
+ros2 control set_controller_state rover_arm_controller_moveit inactive

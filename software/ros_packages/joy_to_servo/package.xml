@@ -12,8 +12,14 @@
   <depend>moveit_servo</depend>
   <depend>joy</depend>
   <depend>rover_arm_urdf</depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>controller_manager_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>moveit_ros_planning_interface</depend>
+  <depend>eigen3</depend>
 
-  <test_depend>ament_lint_auto</test_depend>
+<test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
   <export>

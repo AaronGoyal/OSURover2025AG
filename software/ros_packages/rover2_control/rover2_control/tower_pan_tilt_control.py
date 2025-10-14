@@ -4,7 +4,7 @@
 #####################################
 # Python native imports
 import rclpy
-from rclpy.node import Node 
+from rclpy.node import Node
 from time import time, sleep
 
 import serial.rs485
@@ -35,7 +35,7 @@ COMMUNICATIONS_TIMEOUT = 0.02  # Seconds
 RX_DELAY = 0.02
 TX_DELAY = 0.02
 
-DEFAULT_HERTZ = 20
+DEFAULT_HERTZ = 60
 
 PAN_TILT_MODBUS_REGISTERS = {
     "CENTER_ALL": 0,
@@ -102,7 +102,7 @@ GPS_FRAC_DENOM = 2**16 # fraction of full degree expressed as uint16
 class TowerPanTiltControl(Node):
     def __init__(self):
         super().__init__(NODE_NAME)
-        
+
         self.port = self.declare_parameter("~port", DEFAULT_PORT).value
         self.baud = self.declare_parameter("~baud", DEFAULT_BAUD).value
 
@@ -128,7 +128,7 @@ class TowerPanTiltControl(Node):
                                                                 self.pan_tilt_control_subscriber_topic,
                                                                 self.pan_tilt_control_callback, 1)
 
-        self.tower_light_control_subscriber = self.create_subscription(LightControlMessage, self.tower_light_control_subscriber_topic,
+        self.tower_light_control_subscriber = self.create_subscription(UInt8, self.tower_light_control_subscriber_topic,
                                                                 self.tower_light_control_callback, 1)
 
         self.tower_gps_publisher = self.create_publisher(GPSStatusMessage, self.tower_gps_publisher_topic, 1)
@@ -211,23 +211,23 @@ class TowerPanTiltControl(Node):
         gps_status = GPSStatusMessage()
         tower_data = self.tower_node.read_registers(1, len(GPS_COORDINATES) * REGISTERS_PER_COORDINATE) # skip light control
 
-        gps_coords = [0]*len(GPS_COORDINATES) 
+        gps_coords = [0]*len(GPS_COORDINATES)
         for i in range(len(gps_coords)):
             offset = i*REGISTERS_PER_COORDINATE                                                    # each gps coordinate has three registers
             coord_sign, coord_deg, coord_frac = tower_data[offset:offset+REGISTERS_PER_COORDINATE] # extract parts of coordinate
-            gps_coords[i] += coord_deg + coord_frac / GPS_FRAC_DENOM                               # frac is [0, 1) mapped to uint16
-            gps_coords *= -1 if coord_sign else 1                                                  # sign 0 is positive (N, E) is negative (S, W)
+            gps_coords[i] = coord_deg + coord_frac / GPS_FRAC_DENOM                               # frac is [0, 1) mapped to uint16
+            gps_coords[i] *= -1 if coord_sign else 1                                                  # sign 0 is positive (N, E) is negative (S, W)
 
         gps_status.rover_latitude = gps_coords[GPS_COORDINATES["rover_latitude"]]
         gps_status.rover_longitude = gps_coords[GPS_COORDINATES["rover_longitude"]]
         gps_status.astronaut_latitude = gps_coords[GPS_COORDINATES["astronaut_latitude"]]
         gps_status.astronaut_longitude = gps_coords[GPS_COORDINATES["astronaut_longitude"]]
-
+        #print(gps_status)
         self.tower_gps_publisher.publish(gps_status)
 
     def send_tower_control_message(self):
         if self.new_tower_light_control_message:
-            self.tower_node.write_register(0, min(self.tower_light_control_message.light_mode, TOWER_LIGHT_STATES["LIGHT_LED"]))
+            self.tower_node.write_register(0, min(self.tower_light_control_message.data, TOWER_LIGHT_STATES["LIGHT_LED"]))
             self.new_tower_light_control_message = False
 
     def pan_tilt_control_callback(self, pan_tilt_control):

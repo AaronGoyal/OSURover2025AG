@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+
+<!--
+Urdf for the rover of the DAM Robotics Rover triple bogie system.
+-->
+
+<robot name="rover" xmlns:xacro="https://ros.org/wiki/xacro">
+
+    <!-- Includes (material libraries, etc) -->
+
+
+    <!-- Link Chasis with bogies and tower -->
+
+
+    <!-- Link Arm or Scimech-->
+
+        <!-- Arm option for gripper -->

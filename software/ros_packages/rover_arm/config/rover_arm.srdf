@@ -64,4 +64,7 @@
     <disable_collisions link1="arm_link_3" link2="arm_link_4" reason="Adjacent"/>
     <disable_collisions link1="arm_link_3" link2="base_link" reason="Never"/>
     <disable_collisions link1="arm_link_4" link2="base_link" reason="Never"/>
+    <disable_collisions link1="arm_gripper" link2="d405_link" reason="Never"/>
+    <disable_collisions link1="base_link" link2="d455_link" reason="Never"/>
+    <disable_collisions link1="base_link" link2="rover_body" reason="Never"/>
 </robot>

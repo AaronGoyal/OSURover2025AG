@@ -50,41 +50,18 @@
 const std::string JOY_TOPIC = "/joy";
 const std::string TWIST_TOPIC = "/servo_node/delta_twist_cmds";
 const std::string JOINT_TOPIC = "/servo_node/delta_joint_cmds";
-const std::string EEF_FRAME_ID = "rover_hand";
+const std::string EEF_FRAME_ID = "arm_gripper";
 const std::string BASE_FRAME_ID = "base_link";
 
-// Enums for button names -> axis/button array index
-// For XBOX 1 controller
-enum Axis
-{
-  LEFT_STICK_X = 0,
-  LEFT_STICK_Y = 1,
-  LEFT_TRIGGER = 2,
-  RIGHT_STICK_X = 3,
-  RIGHT_STICK_Y = 4,
-  RIGHT_TRIGGER = 5,
-  D_PAD_X = 6,
-  D_PAD_Y = 7
-};
-enum Button
-{
-  A = 0,
-  B = 1,
-  X = 2,
-  Y = 3,
-  LEFT_BUMPER = 4,
-  RIGHT_BUMPER = 5,
-  CHANGE_VIEW = 6,
-  MENU = 7,
-  HOME = 8,
-  LEFT_STICK_CLICK = 9,
-  RIGHT_STICK_CLICK = 10
-};
+struct ControllerMappings {
 
-// Some axes have offsets (e.g. the default trigger position is 1.0 not 0)
-// This will map the default values for the axes
-std::map<Axis, double> AXIS_DEFAULTS = { { LEFT_TRIGGER, 1.0 }, { RIGHT_TRIGGER, 1.0 } };
-std::map<Button, double> BUTTON_DEFAULTS;
+  std::map<std::string, int> AXIS_MAP;
+  std::map<std::string, int> BUTTON_MAP;
+
+  std::map<std::string, double> AXIS_DEFAULTS;
+  std::map<std::string, double> BUTTON_DEFAULTS;
+
+};
 
 // To change controls or setup a new controller, all you should to do is change the above enums and the follow 2
 // functions
@@ -98,91 +75,101 @@ std::map<Button, double> BUTTON_DEFAULTS;
 bool convertJoyToCmd(const std::vector<float>& axes, const std::vector<int>& buttons,
                      std::unique_ptr<geometry_msgs::msg::TwistStamped>& twist,
                      std::unique_ptr<control_msgs::msg::JointJog>& joint,
-                     bool& use_ik)
+                     bool& use_ik, const ControllerMappings& controllerMappings, float& slowdown)
 {
   // Give joint jogging priority because it is only buttons
   // If any joint jog command is requested, we are only publishing joint commands
-  if(buttons[MENU]){
+  if(buttons[controllerMappings.BUTTON_MAP.at("MENU")]){
     use_ik = false;
     
   }
-  else if(buttons[CHANGE_VIEW]){
+  else if(buttons[controllerMappings.BUTTON_MAP.at("CHANGE_VIEW")]){
     use_ik = true;
   }
 
+
   if(use_ik){ //ik controls
-    if (axes[D_PAD_Y] || buttons[LEFT_BUMPER] || buttons[RIGHT_BUMPER])
+    if (axes[controllerMappings.AXIS_MAP.at("D_PAD_Y")] || buttons[controllerMappings.BUTTON_MAP.at("LEFT_BUMPER")] || buttons[controllerMappings.BUTTON_MAP.at("RIGHT_BUMPER")])
     {
       // Map the D_PAD to the proximal joints
       // joint->joint_names.push_back("base_joint");
-      // joint->velocities.push_back(axes[D_PAD_X]);
+      // joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("D_PAD_X")]);
       joint->joint_names.push_back("shoulder_joint");
-      joint->velocities.push_back(axes[D_PAD_Y]);
-      joint->joint_names.push_back("wrist_roll_joint");
-      joint->velocities.push_back(buttons[RIGHT_BUMPER] - buttons[LEFT_BUMPER]);
+      joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("D_PAD_Y")] * slowdown);
+      // joint->joint_names.push_back("wrist_roll_joint");
+      // joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("D_PAD_X")]);
       // Map the diamond to the distal joints
       return false;
     }
 
     // The bread and butter: map buttons to twist commands
-    twist->twist.linear.z = axes[LEFT_STICK_Y];
-    twist->twist.linear.x = -1.0 * axes[LEFT_STICK_X];
+    twist->twist.linear.y = axes[controllerMappings.AXIS_MAP.at("LEFT_STICK_Y")] * slowdown;
+    twist->twist.linear.x = -1.0 * axes[controllerMappings.AXIS_MAP.at("LEFT_STICK_X")] * slowdown;
 
-    double lin_y_right = -0.5 * (axes[RIGHT_TRIGGER] - AXIS_DEFAULTS.at(RIGHT_TRIGGER));
-    double lin_y_left = 0.5 * (axes[LEFT_TRIGGER] - AXIS_DEFAULTS.at(LEFT_TRIGGER));
-    twist->twist.linear.y = lin_y_right + lin_y_left;
+    double lin_y_right = -0.5 * (axes[controllerMappings.AXIS_MAP.at("RIGHT_TRIGGER")] - controllerMappings.AXIS_DEFAULTS.at("RIGHT_TRIGGER"));
+    double lin_y_left = 0.5 * (axes[controllerMappings.AXIS_MAP.at("LEFT_TRIGGER")] - controllerMappings.AXIS_DEFAULTS.at("LEFT_TRIGGER"));
+    twist->twist.linear.z = (lin_y_right + lin_y_left) * slowdown;
 
+    //pitch
+    twist->twist.angular.x = axes[controllerMappings.AXIS_MAP.at("RIGHT_STICK_Y")] * slowdown;
+    //Yaw
+    twist->twist.angular.y = axes[controllerMappings.AXIS_MAP.at("RIGHT_STICK_X")] * slowdown;
+    // Roll
+    twist->twist.angular.z = axes[controllerMappings.AXIS_MAP.at("D_PAD_X")] * slowdown;
 
-    twist->twist.angular.x = axes[RIGHT_STICK_Y];
-
-    // double roll_positive = buttons[RIGHT_BUMPER];
-    // double roll_negative = -1 * (buttons[LEFT_BUMPER]);
+    // double roll_positive = buttons[controllerMappings.BUTTON_MAP.at("RIGHT_BUMPER")];
+    // double roll_negative = -1 * (buttons[xontrollerMappings.BUTTON_MAP.at("LEFT_BUMPER")]);
     // twist->twist.angular.z = roll_positive + roll_negative;
 
     return true;
   }
   else{ //joint by joint control
     joint->joint_names.push_back("base_joint");
-    joint->velocities.push_back(axes[D_PAD_X] * -0.30);
+    joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("D_PAD_X")] * -0.30);
     joint->joint_names.push_back("shoulder_joint");
-    joint->velocities.push_back(axes[D_PAD_Y] * -0.25);
+    joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("D_PAD_Y")] * -0.25);
     joint->joint_names.push_back("elbow_pitch_joint");
-    joint->velocities.push_back(axes[LEFT_STICK_Y] * -0.30); //THIS JOINT IS BACKWARDS
+    joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("LEFT_STICK_Y")] * -0.30); //THIS JOINT IS BACKWARDS
     joint->joint_names.push_back("elbow_roll_joint");
-    joint->velocities.push_back(axes[LEFT_STICK_X] * -0.25);
+    joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("LEFT_STICK_X")] * -0.25);
     joint->joint_names.push_back("wrist_pitch_joint");
-    joint->velocities.push_back(axes[RIGHT_STICK_Y] * -0.30);
+    joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("RIGHT_STICK_Y")] * -0.30);
     joint->joint_names.push_back("wrist_roll_joint");
-    joint->velocities.push_back(axes[RIGHT_STICK_X]);
+    joint->velocities.push_back(axes[controllerMappings.AXIS_MAP.at("RIGHT_STICK_X")]);
 
     return false;
   }
-
-
 }
 
 /** \brief // This should update the frame_to_publish_ as needed for changing command frame via controller
  * @param frame_name Set the command frame to this
  * @param buttons The vector of discrete controller button values
  */
-void updateCmdFrame(std::string& frame_name, const std::vector<int>& buttons)
+void updateCmdFrame(std::string& frame_name, const std::vector<int>& buttons, const ControllerMappings& controllerMappings)
 {
-  if (buttons[CHANGE_VIEW] && frame_name == EEF_FRAME_ID)
-    frame_name = BASE_FRAME_ID;
-  else if (buttons[MENU] && frame_name == BASE_FRAME_ID)
+  if (buttons[controllerMappings.BUTTON_MAP.at("CHANGE_VIEW")] && frame_name == EEF_FRAME_ID)
+    frame_name = EEF_FRAME_ID;
+  else if (buttons[controllerMappings.BUTTON_MAP.at("MENU")] && frame_name == BASE_FRAME_ID)
     frame_name = EEF_FRAME_ID;
 }
-
 
 class JoyToServoNode : public rclcpp::Node
 {
 public:
   JoyToServoNode(const rclcpp::NodeOptions& options)
-    : Node("joy_to_twist_publisher", options), frame_to_publish_(BASE_FRAME_ID)
+    : Node("joy_to_twist_publisher", options), frame_to_publish_(EEF_FRAME_ID)
   {
+    // Declare and get the controller type parameter
+    this->declare_parameter<std::string>("controller_type", "xbox");
+    std::string controller_type = this->get_parameter("controller_type").as_string();
 
-    use_ik = false;
+    RCLCPP_INFO(this->get_logger(), "Using controller type: %s", controller_type.c_str());
 
+    // Initialize the mappings based on controller type
+    initializeControllerMappings(controller_type);
+
+    use_ik = true;
+    slowdown = 1.0;
     // Setup pub/sub
     joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
         JOY_TOPIC, rclcpp::SystemDefaultsQoS(),
@@ -199,45 +186,45 @@ public:
     servo_start_client_->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
 
     // Load the collision scene asynchronously
-    collision_pub_thread_ = std::thread([this]() {
-      rclcpp::sleep_for(std::chrono::seconds(3));
+    // collision_pub_thread_ = std::thread([this]() {
+    //   rclcpp::sleep_for(std::chrono::seconds(3));
       // Create collision object, in the way of servoing
-      moveit_msgs::msg::CollisionObject collision_object;
-      collision_object.header.frame_id = "base_link";
-      collision_object.id = "box";
+      // moveit_msgs::msg::CollisionObject collision_object;
+      // collision_object.header.frame_id = "base_link";
+      // collision_object.id = "box";
 
-      shape_msgs::msg::SolidPrimitive table_1;
-      table_1.type = table_1.BOX;
-      table_1.dimensions = { 0.04, 0.04, 2.0 };
+      // shape_msgs::msg::SolidPrimitive table_1;
+      // table_1.type = table_1.BOX;
+      // table_1.dimensions = { 0.04, 0.04, 2.0 };
 
-      geometry_msgs::msg::Pose table_1_pose;
-      table_1_pose.position.x = 0.0;
-      table_1_pose.position.y = -0.5;
-      table_1_pose.position.z = 1.0;
+      // geometry_msgs::msg::Pose table_1_pose;
+      // table_1_pose.position.x = 0.0;
+      // table_1_pose.position.y = -0.5;
+      // table_1_pose.position.z = 1.0;
 
-      shape_msgs::msg::SolidPrimitive table_2;
-      table_2.type = table_2.BOX;
-      table_2.dimensions = { 0.6, 0.4, 0.03 };
+      // shape_msgs::msg::SolidPrimitive table_2;
+      // table_2.type = table_2.BOX;
+      // table_2.dimensions = { 0.6, 0.4, 0.03 };
 
-      geometry_msgs::msg::Pose table_2_pose;
-      table_2_pose.position.x = 0.0;
-      table_2_pose.position.y = -0.5;
-      table_2_pose.position.z = 0.25;
+      // geometry_msgs::msg::Pose table_2_pose;
+      // table_2_pose.position.x = 0.0;
+      // table_2_pose.position.y = -0.5;
+      // table_2_pose.position.z = 0.25;
 
-      collision_object.primitives.push_back(table_1);
-      collision_object.primitive_poses.push_back(table_1_pose);
-      collision_object.primitives.push_back(table_2);
-      collision_object.primitive_poses.push_back(table_2_pose);
-      collision_object.operation = collision_object.ADD;
+      // collision_object.primitives.push_back(table_1);
+      // collision_object.primitive_poses.push_back(table_1_pose);
+      // collision_object.primitives.push_back(table_2);
+      // collision_object.primitive_poses.push_back(table_2_pose);
+      // collision_object.operation = collision_object.ADD;
 
-      moveit_msgs::msg::PlanningSceneWorld psw;
-      psw.collision_objects.push_back(collision_object);
+      // moveit_msgs::msg::PlanningSceneWorld psw;
+      // // psw.collision_objects.push_back(collision_object);
 
-      auto ps = std::make_unique<moveit_msgs::msg::PlanningScene>();
-      ps->world = psw;
-      ps->is_diff = true;
-      collision_pub_->publish(std::move(ps));
-    });
+      // auto ps = std::make_unique<moveit_msgs::msg::PlanningScene>();
+      // ps->world = psw;
+      // ps->is_diff = true;
+      // collision_pub_->publish(std::move(ps));
+    // });
   }
 
   ~JoyToServoNode() override
@@ -253,10 +240,10 @@ public:
     auto joint_msg = std::make_unique<control_msgs::msg::JointJog>();
 
     // This call updates the frame for twist commands
-    updateCmdFrame(frame_to_publish_, msg->buttons);
+    updateCmdFrame(frame_to_publish_, msg->buttons, controller_map);
 
     // Convert the joystick message to Twist or JointJog and publish
-    if (convertJoyToCmd(msg->axes, msg->buttons, twist_msg, joint_msg, use_ik))
+    if (convertJoyToCmd(msg->axes, msg->buttons, twist_msg, joint_msg, use_ik, controller_map, slowdown))
     {
       // publish the TwistStamped
       twist_msg->header.frame_id = frame_to_publish_;
@@ -281,12 +268,60 @@ private:
 
   bool use_ik;
 
+  float slowdown;
+
   std::string frame_to_publish_;
 
   std::thread collision_pub_thread_;
+
+  ControllerMappings controller_map;
+
+  void initializeControllerMappings(const std::string& controller_type)
+  {
+      if (controller_type == "xbox")
+      {
+          // Xbox Controller Mapping
+          controller_map.AXIS_DEFAULTS = { { "LEFT_TRIGGER", 1.0 }, { "RIGHT_TRIGGER", 1.0 } };
+
+          controller_map.AXIS_MAP = {
+              { "LEFT_STICK_X", 0 }, { "LEFT_STICK_Y", 1 }, { "LEFT_TRIGGER", 2 },
+              { "RIGHT_STICK_X", 3 }, { "RIGHT_STICK_Y", 4 }, { "RIGHT_TRIGGER", 5 },
+              { "D_PAD_X", 6 }, { "D_PAD_Y", 7 }
+          };
+
+          controller_map.BUTTON_MAP = {
+              { "A", 0 }, { "B", 1 }, { "X", 2 }, { "Y", 3 },
+              { "LEFT_BUMPER", 4 }, { "RIGHT_BUMPER", 5 },
+              { "CHANGE_VIEW", 6 }, { "MENU", 7 },
+              { "HOME", 8 }, { "LEFT_STICK_CLICK", 9 }, { "RIGHT_STICK_CLICK", 10 }
+          };
+      }
+      else if (controller_type == "ps")
+      {
+          // PlayStation Controller Mapping
+          controller_map.AXIS_DEFAULTS = { { "LEFT_TRIGGER", 1.0 }, { "RIGHT_TRIGGER", 1.0 } };
+
+          controller_map.AXIS_MAP = {
+              { "LEFT_STICK_X", 0 }, { "LEFT_STICK_Y", 1 }, { "LEFT_TRIGGER", 2 },
+              { "RIGHT_STICK_X", 3 }, { "RIGHT_STICK_Y", 4 }, { "RIGHT_TRIGGER", 5 },
+              { "D_PAD_X", 6 }, { "D_PAD_Y", 7 }
+          };
+
+          controller_map.BUTTON_MAP = {
+              { "A", 0 }, { "B", 1 }, { "X", 2 }, { "Y", 3 }, // X, CIRCLE, TRIANGLE, SQUARE
+              { "LEFT_BUMPER", 4 }, { "RIGHT_BUMPER", 5 },
+              {"LEFT_TRIGGER", 6}, {"RIGHT_TRIGGER", 7},
+              { "CHANGE_VIEW", 8 }, { "MENU", 9 }, //SHARE, OPTIONS
+              { "HOME", 10 }, { "LEFT_STICK_CLICK", 11 }, { "RIGHT_STICK_CLICK", 12}
+          };
+      }
+      else
+      {
+          RCLCPP_WARN(this->get_logger(), "Unknown controller type. Defaulting to Xbox mapping.");
+          initializeControllerMappings("xbox");  // Default to Xbox
+      }
+  }
 };  // class JoyToServoNode
-
-
 
 int main(int argc, char * argv[]){
   rclcpp::init(argc, argv);

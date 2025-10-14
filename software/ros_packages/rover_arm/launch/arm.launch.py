@@ -2,6 +2,8 @@ import os
 import yaml
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
@@ -33,9 +35,23 @@ def load_yaml(package_name, file_path):
 
 
 def generate_launch_description():
+    ros2_control_hardware_type = DeclareLaunchArgument(
+        "ros2_control_hardware_type",
+        default_value="main",
+        description="Ros2 Control Hardware Interface Type [main, sim]",
+    )
     moveit_config = (
         MoveItConfigsBuilder("rover_arm", package_name="rover_arm")
-        .robot_description(file_path="config/rover_arm.urdf.xacro")
+
+        .robot_description(
+            file_path="config/rover_arm.urdf.xacro",
+            mappings={
+                "ros2_control_hardware_type": LaunchConfiguration(
+                    "ros2_control_hardware_type"
+                )
+            },
+
+        )
         .to_moveit_configs()
     )
 
@@ -44,20 +60,21 @@ def generate_launch_description():
     servo_params = {"moveit_servo": servo_yaml}
 
     # RViz
- #   rviz_config_file = (
- #       get_package_share_directory("rover_arm") + "/config/rviz_config.rviz"
- #   )
- #   rviz_node = Node(
- #       package="rviz2",
- #       executable="rviz2",
- #       name="rviz2",
- #       output="log",
- #       arguments=["-d", rviz_config_file],
- #       parameters=[
- #           moveit_config.robot_description,
- #           moveit_config.robot_description_semantic,
- #       ],
- #   )
+    rviz_config_file = (
+        get_package_share_directory("rover_arm") + "/config/rviz_config.rviz"
+    )
+
+    rviz_node = Node(
+        package="rviz2",
+        executable="rviz2",
+        name="rviz2",
+        output="log",
+        arguments=["-d", rviz_config_file],
+        parameters=[
+            moveit_config.robot_description,
+            moveit_config.robot_description_semantic,
+        ],
+    )
 
     # ros2_control using FakeSystem as hardware
     ros2_controllers_path = os.path.join(
@@ -70,6 +87,21 @@ def generate_launch_description():
         executable="ros2_control_node",
         parameters=[moveit_config.robot_description, ros2_controllers_path],
         output="screen",
+    )
+        # Motion Planning - Move Group Node
+    move_group_node = Node(
+        package="moveit_ros_move_group",
+        executable="move_group",
+        output="screen",
+        parameters=[
+            moveit_config.robot_description,
+            moveit_config.robot_description_semantic,
+            moveit_config.robot_description_kinematics,
+            moveit_config.joint_limits,
+            moveit_config.planning_pipelines,
+            moveit_config.move_group_capabilities,
+            moveit_config.trajectory_execution,
+        ],
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -89,6 +121,12 @@ def generate_launch_description():
         executable="spawner",
         arguments=["rover_arm_controller", "-c", "/controller_manager"],
     )
+    moveit_arm_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["rover_arm_controller_moveit", "-c", "/controller_manager"],
+    )
+
 
     # Launch as much as possible in components
     container = ComposableNodeContainer(
@@ -147,15 +185,28 @@ def generate_launch_description():
         package="joy_to_servo",
         executable="joy_to_servo_node",
     )
+    controller_switcher_node = Node(
+        package="joy_to_servo",
+        executable="controller_switcher",
+    )
+    joint_angle_setter_node = Node(
+        package = "joy_to_servo",
+        executable="joint_angle_controller",
+    )
 
     return LaunchDescription(
         [
-#            rviz_node,
+            rviz_node,
             ros2_control_node,
             joint_state_broadcaster_spawner,
             panda_arm_controller_spawner,
+            moveit_arm_controller_spawner,
+            move_group_node,
             servo_node,
             joy_to_servo_node,
+            controller_switcher_node,
+            joint_angle_setter_node,
+            ros2_control_hardware_type,
             container,
         ]
     )

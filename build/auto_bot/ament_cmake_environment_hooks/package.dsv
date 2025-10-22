@@ -1,0 +1,4 @@
+source;share/auto_bot/local_setup.bash
+source;share/auto_bot/local_setup.dsv
+source;share/auto_bot/local_setup.sh
+source;share/auto_bot/local_setup.zsh

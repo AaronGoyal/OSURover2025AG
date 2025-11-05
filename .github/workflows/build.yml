@@ -26,6 +26,11 @@ jobs:
           apt-get install -y python3-rosdep
           rosdep init
           rosdep update 
+          
+      - name: Install colcon
+        run: |
+          apt-get update
+          apt-get install -y python3-colcon-common-extensions
       #- name: Setup ROS
       #  uses: ros-tooling/setup-ros@v0.7
       #  with:

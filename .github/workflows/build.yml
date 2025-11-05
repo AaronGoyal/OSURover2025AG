@@ -27,14 +27,10 @@ jobs:
           rosdep init
           rosdep update 
           
-      - name: Install colcon
+      - name: Install build tools
         run: |
           apt-get update
           apt-get install -y python3-colcon-common-extensions build-essential cmake
-      #- name: Setup ROS
-      #  uses: ros-tooling/setup-ros@v0.7
-      #  with:
-      #    required-ros-distributions: humble
 
       - name: Build package
         run: |

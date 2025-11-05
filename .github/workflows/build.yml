@@ -19,9 +19,12 @@ jobs:
 
       - name: Build package
         run: |
+          mkdir -p ~/ros_ws/src
+          cp -R $GITHUB_WORKSPACE/* ~/ros_ws/src/
+          cd ~/ros_ws
           cd $GITHUB_WORKSPACE
           rosdep update
           rosdep install --from-paths src --ignore-src -r -y
           source /opt/ros/humble/setup.sh
-          colcon build --packages-select auto_bot
+          colcon build --packages-select auto_bot --cmake-args -DCMAKE_BUILD_TYPE=Release
           source install/setup.sh

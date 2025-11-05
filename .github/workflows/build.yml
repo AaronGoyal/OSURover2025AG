@@ -30,7 +30,7 @@ jobs:
       - name: Install colcon
         run: |
           apt-get update
-          apt-get install -y python3-colcon-common-extensions
+          apt-get install -y python3-colcon-common-extensions build-essential cmake
       #- name: Setup ROS
       #  uses: ros-tooling/setup-ros@v0.7
       #  with:

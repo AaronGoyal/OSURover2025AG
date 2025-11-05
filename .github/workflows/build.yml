@@ -7,7 +7,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-
+    container:
+      image: ros:humble-ros-core
+      
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -16,12 +18,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /var/cache/apt/archives
-          key: ${{ runner.os }}-rosdep-${{ hashFiles('**/package.xml') }}
+          key: ${{ runner.os }}-rosdep
           
-      - name: Setup ROS
-        uses: ros-tooling/setup-ros@v0.7
-        with:
-          required-ros-distributions: humble  # change to your distro
+      #- name: Setup ROS
+      #  uses: ros-tooling/setup-ros@v0.7
+      #  with:
+      #    required-ros-distributions: humble
 
       - name: Build package
         run: |

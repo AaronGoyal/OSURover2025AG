@@ -12,6 +12,12 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-rosdep-${{ hashFiles('**/package.xml') }}
+          
       - name: Setup ROS
         uses: ros-tooling/setup-ros@v0.7
         with:

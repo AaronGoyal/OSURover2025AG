@@ -19,7 +19,12 @@ jobs:
         with:
           path: /var/cache/apt/archives
           key: ${{ runner.os }}-rosdep
-          
+      
+      - name: Install rosdep
+        run: |
+          apt-get update
+          apt-get install -y python3-rosdep
+          rosdep update 
       #- name: Setup ROS
       #  uses: ros-tooling/setup-ros@v0.7
       #  with:
@@ -31,7 +36,6 @@ jobs:
           cp -R $GITHUB_WORKSPACE/* ~/ros_ws/src/
           cd ~/ros_ws
           cd $GITHUB_WORKSPACE
-          rosdep update
           rosdep install --from-paths src --ignore-src -r -y
           source /opt/ros/humble/setup.sh
           colcon build --packages-select auto_bot --cmake-args -DCMAKE_BUILD_TYPE=Release

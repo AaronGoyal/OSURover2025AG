@@ -32,16 +32,8 @@ def generate_launch_description():
         output='screen'
     )
 
-    spawn_entity_event = RegisterEventHandler(
-        OnProcessStart(
-            target_action=matches_action(gazebo),  # ensures it triggers after Gazebo launch
-            on_start=[spawn_entity]
-        )
-    )
-
     return LaunchDescription([
         rsp,
         gazebo,
         spawn_entity,
-        #spawn_entity_event,
     ])

@@ -1,105 +1,100 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-    <!-- <xacro:include filename="$(find realsense_ros2_gazebo)/xacro/depthcam.xacro"/> -->
-    <!-- <xacro:realsense_d435 sensor_name="d435" parent_link="base_link" rate="10"> -->
-    <!--     <origin rpy="0 0 0 " xyz="0 0 0.5"/> -->
-    <!-- </xacro:realsense_d435> -->
+  <joint name="camera_joint" type="fixed">
+    <parent link="chassis"/>
+    <child  link="camera_link"/>
+    <!-- <origin xyz="0.064 -0.065 0.094" rpy="0 0 0"/> -->
+    <origin xyz="0.307 0 0.16" rpy="0 0 0"/>
+  </joint>
 
-    <joint name="camera_joint" type="fixed">
-        <parent link="chassis"/>
-        <child link="camera_link"/>
-        <origin xyz="0.306 0 0.16" rpy="0 0 0"/>
-    </joint>
+  <link name="camera_link">
+    <visual>
+      <geometry>
+        <box size="0.010 0.06 0.04"/>
+      </geometry>
+      <material name="orange"/>
+    </visual>
+  </link>
 
-    <link name="camera_link">
-        <visual>
-            <geometry>
-                <box size="0.010 0.06 0.04"/>
-            </geometry>
-            <material name="orange"/>
-        </visual>
-    </link>
+  <!-- intermediate frame -->
+  <!-- <link name="camera_rgb_frame"/> -->
+  <!---->
+  <!-- <joint name="camera_rgb_joint" type="fixed"> -->
+  <!--   <parent link="camera_link"/> -->
+  <!--   <child  link="camera_rgb_frame"/> -->
+  <!-- <origin xyz="0.005 0.018 0.013" rpy="0 0 0"/> -->
+  <!--   <origin xyz="0 0 0" rpy="0 0 0"/> -->
+  <!-- </joint> -->
+  <!---->
+  <!-- optical frame with inertial expressed in URDF form -->
+  <link name="camera_rgb_optical_frame">
+    <inertial>
+      <!-- <origin xyz="0.069 -0.047 0.107" rpy="0 0 0"/> -->
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.035"/>
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0"
+               iyy="0.001" iyz="0.0" izz="0.001"/>
+    </inertial>
+  </link>
 
-    <link name="camera_rgb_optical_frame">
-        <inertial>
-            <pose>0.069 -0.047 0.107 0 0 0</pose>
-            <inertia>
-                <ixx>0.001</ixx>
-                <ixy>0.000</ixy>
-                <ixz>0.000</ixz>
-                <iyy>0.001</iyy>
-                <iyz>0.000</iyz>
-                <izz>0.001</izz>
-            </inertia>
-            <mass>0.035</mass>
-        </inertial>
+  <joint name="camera_rgb_optical_joint" type="fixed">
+    <!-- <parent link="camera_rgb_frame"/> -->
+    <parent link="camera_link"/>
+    <child  link="camera_rgb_optical_frame"/>
+    <!-- rpy as in your original (roll, pitch, yaw) -->
+    <!-- <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679"/> -->
+    <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    <!-- <origin xyz="0 0 0" rpy="0 0 0"/> -->
+  </joint>
 
-        <pose>0.069 -0.047 0.107 0 0 0</pose>
-        <sensor name="camera" type="depth">
-            <always_on>true</always_on>
-            <visualize>true</visualize>
-            <update_rate>30</update_rate>
-            <camera name="intel_realsense_d455">
-                <horizontal_fov>1.02974</horizontal_fov>
-                <image>
-                    <width>640</width>
-                    <height>480</height>
-                    <format>R8G8B8</format>
-                </image>
-                <clip>
-                    <near>0.02</near>
-                    <far>300</far>
-                </clip>
-                <noise>
-                    <type>gaussian</type>
-                    <!-- Noise is sampled independently per pixel on each frame.
-                  That pixel's noise value is added to each of its color
-                  channels, which at that point lie in the range [0,1]. -->
-                    <mean>0.0</mean>
-                    <stddev>0.007</stddev>
-                </noise>
-            </camera>
-            <plugin name="camera_driver" filename="libgazebo_ros_camera.so">
-                <ros>
-                    <!-- <namespace>test_cam</namespace> -->
-                    <!-- <remapping>image_raw:=image_demo</remapping> -->
-                    <!-- <remapping>camera_info:=camera_info_demo</remapping> -->
-                </ros>
-                <!-- camera_name>omit so it defaults to sensor name</camera_name-->
-                <!-- frame_name>omit so it defaults to link name</frameName-->
-                <!-- <hack_baseline>0.07</hack_baseline> -->
-            </plugin>
-        </sensor>
-    </link>    
+  <!-- <gazebo reference="camera_rgb_optical_frame"> -->
+  <gazebo reference="camera_link">
+    <sensor name="camera" type="depth">
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+      <update_rate>30</update_rate>
 
-    <link name="camera_rgb_frame" />
+      <camera name="intel_realsense_d455">
+        <horizontal_fov>1.02974</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>B8G8R8</format>
+        </image>
+        <clip>
+          <!-- <near>0.02</near> -->
+          <!-- <far>300</far> -->
+          <near>0.02</near>
+          <far>20.0</far>
+        </clip>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.007</stddev>
+        </noise>
+      </camera>
 
-    <joint name="camera_rgb_optical_joint" type="fixed">
-        <parent>camera_rgb_frame</parent>
-        <child>camera_rgb_optical_frame</child>
-        <pose>0 0 0 -1.57079632679 0 -1.57079632679</pose>
-        <axis>
-            <xyz>0 0 1</xyz>
-        </axis>
-    </joint> 
+      <plugin name="camera_driver" filename="libgazebo_ros_camera.so">
+        <ros>
+          <namespace></namespace>
+        </ros>
 
-    <joint name="camera_joint" type="fixed">
-        <parent>base_link</parent>
-        <child>camera_link</child>
-        <pose>0.064 -0.065 0.094 0 0 0</pose>
-        <axis>
-            <xyz>0 0 1</xyz>
-        </axis>
-    </joint>
+        <!-- Topics / frame -->
+        <camera_name>camera</camera_name>
+        <image_topic_name>image_raw</image_topic_name>
+        <camera_info_topic_name>camera_info</camera_info_topic_name>
+        <point_cloud_topic_name>points</point_cloud_topic_name>
+        <frame_name>camera_rgb_optical_frame</frame_name>
 
-    <joint name="camera_rgb_joint" type="fixed">
-        <parent>camera_link</parent>
-        <child>camera_rgb_frame</child>
-        <pose>0.005 0.018 0.013 0 0 0</pose>
-        <axis>
-            <xyz>0 0 1</xyz>
-        </axis>
-    </joint>
+        <!-- useful plugin params you can tune -->
+        <update_rate>30</update_rate>
+        <always_on>true</always_on>
+        <visualize>true</visualize>
+        <min_depth>0.1</min_depth>
+        <max_depth>100</max_depth>
+      </plugin>
+    </sensor>
+  </gazebo>
 
 </robot>

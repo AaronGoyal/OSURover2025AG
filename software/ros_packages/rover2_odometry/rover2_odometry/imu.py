@@ -22,7 +22,7 @@ NODE_NAME = "imu"
 DEFAULT_IMU_TOPIC = "imu/data"
 IMU_HEADING_TOPIC = "imu/data/heading"
 
-DEFAULT_HERTZ = 1000
+DEFAULT_HERTZ = 30
 
 #####################################
 # Odometry Class Definition

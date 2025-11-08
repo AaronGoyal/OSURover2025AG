@@ -26,11 +26,11 @@ def generate_launch_description():
             executable='scimech_sensors',
             name='scimech_sensors',
             **config
+        ),
+        Node(
+            package='rover2_odometry',
+            executable='odometry',
+            name='odometry',
+            **config
         )
-#        Node(
-#            package='rover2_odometry',
-#            executable='odometry',
-#            name='gps',
-#            **config
-#        )
     ])

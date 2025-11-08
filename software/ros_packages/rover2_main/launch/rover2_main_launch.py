@@ -13,13 +13,8 @@ def generate_launch_description():
       )
    cameras = IncludeLaunchDescription(
       PythonLaunchDescriptionSource([os.path.join(
-         get_package_share_directory('rover_camera'),
-         'launch'), '/camera_launch.py'])
-      )
-   bridge = IncludeLaunchDescription(
-      XMLLaunchDescriptionSource([os.path.join(
-         get_package_share_directory('rosbridge_server'),
-         'launch'), '/rosbridge_websocket_launch.xml'])
+         get_package_share_directory('rover2_camera'),
+         'launch'), '/camera_capture_launch.py'])
       )
    imu = IncludeLaunchDescription(
       PythonLaunchDescriptionSource([os.path.join(
@@ -38,9 +33,9 @@ def generate_launch_description():
       )
    return LaunchDescription([
       drive_control,
-#      cameras,
-#      bridge,
       imu,
       arm,
-      status
+      status,
+      cameras,
+
    ])

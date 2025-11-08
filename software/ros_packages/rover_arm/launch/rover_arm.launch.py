@@ -117,7 +117,7 @@ def generate_launch_description():
         remappings=[
             ("/controller_manager/robot_description", "/robot_description"),
         ],
-        output="screen",
+        output="screen"
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -136,6 +136,7 @@ def generate_launch_description():
         package="controller_manager",
         executable="spawner",
         arguments=["rover_arm_controller", "-c", "/controller_manager"],
+
     )
 
     moveit_arm_controller_spawner = Node(
@@ -246,7 +247,7 @@ def generate_launch_description():
             "color_height": 720,
             "pointcloud.enable": True,
             "align_depth.enable": True,
-            #"serial_no":"_218622273613",
+            "serial_no":"_218622273613",
             "depth_fps": 10,
             "rgb_fps": 10,
         }],
@@ -283,11 +284,11 @@ def generate_launch_description():
             ros2_control_node,
             joint_state_broadcaster_spawner,
             rover_arm_controller_spawner,
-            moveit_arm_controller_spawner,
             joy_to_servo_node,
             controller_switcher_node,
             servo_node,
             d405_node,
+            moveit_arm_controller_spawner,
             #d455_node,
 
         ]

@@ -37,10 +37,8 @@ jobs:
 
       - name: Build package
         run: |
-          mkdir -p ~/ros_ws/src
-          cp -R $GITHUB_WORKSPACE/* ~/ros_ws/src/
-          cd ~/ros_ws
-          rosdep install --from-paths src --ignore-src -r -y
+          cd $GITHUB_WORKSPACE/software
+          rosdep install --from-paths ros_packages/nav_autonomy --ignore-src -r -y
           . /opt/ros/humble/setup.sh
           colcon build --packages-select nav_autonomy --cmake-args -DCMAKE_BUILD_TYPE=Release
           . install/setup.sh

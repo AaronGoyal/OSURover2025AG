@@ -83,7 +83,7 @@ Visualization Manager:
           Value: true
         base_link:
           Value: true
-        map:
+        world:
           Value: true
         odom:
           Value: true
@@ -113,7 +113,7 @@ Visualization Manager:
       Show Axes: true
       Show Names: false
       Tree:
-        map:
+        world:
           odom:
             base_footprint:
               base_link:

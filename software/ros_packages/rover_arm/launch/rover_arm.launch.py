@@ -280,7 +280,7 @@ def generate_launch_description():
             "pointcloud.stream_filter": 2,
             # "enable_color": True,
             # "enable_depth": True,
-            #"serial_no":"_218622273613",
+            "serial_no":"218622273613",
             "depth_fps": 5,
             "rgb_fps": 5,
         }],

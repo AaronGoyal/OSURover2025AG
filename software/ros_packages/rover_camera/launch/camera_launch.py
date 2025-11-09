@@ -56,5 +56,23 @@ def generate_launch_description():
                 'base_topic': 'cameras/gripper'
             }],
             **config
-        )
+        ),
+        Node(
+        package='realsense2_camera',
+        executable='realsense2_camera_node',
+        name='d455',
+        parameters=[{
+            "camera_name": "d455",
+            "depth_width": 1280,
+            "depth_height": 720,
+            "color_width": 1280,
+            "color_height": 720,
+            "pointcloud.enable": True,
+            "align_depth.enable": True,
+            "serial_no":"318122302525",
+            "depth_fps": 10,
+            "rgb_fps": 10,
+        }],
+        output='screen'
+        ),
     ])

@@ -11,10 +11,14 @@ from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition
 import os
 
+# To launch for testing with camera plugged into laptop
+    # ros2 launch nav_autonomy mapping_launch.py test:=true viz:=true
+
+
 def generate_launch_description():
     parameters=[{
         # rtab params
-        'frame_id':'camera_link',
+        'frame_id':'d455_link',
         'subscribe_depth':True,
         'subscribe_rgb':True,
         'subscribe_odom_info':True,
@@ -26,9 +30,10 @@ def generate_launch_description():
 
     remappings=[
         ('rgb/image', '/camera/d455/color/image_raw'),
-        ('rgb/camera_info', '/d455/camera/color/camera_info'),
+        ('rgb/camera_info', '/camera/d455/color/camera_info'),
         ('depth/image', '/camera/d455/aligned_depth_to_color/image_raw')]
         # KRJ TODO: Remap the odom name if necessary
+        # KRJ TODO: figure out how to tell rtab the offset and orientation of the camera
     
     config_rviz = os.path.join(
         get_package_share_directory('rtabmap_demos'), 'config', 'demo_robot_mapping.rviz'
@@ -45,20 +50,32 @@ def generate_launch_description():
         SetParameter(name='depth_module.emitter_enabled', value=1),
 
         # Launch camera driver for testing
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([os.path.join(
-                get_package_share_directory('realsense2_camera'), 'launch'),
-                '/rs_launch.py']),
-                launch_arguments={'align_depth.enable': 'true',
-                                  'rgb_camera.profile': '640x360x30',
-                                  'camera_name': 'd455'}.items(),
-        ),
+        Node(
+            package='realsense2_camera',
+            executable='realsense2_camera_node',
+            name='d455',
+            parameters=[{
+                "camera_name": "d455",
+                "depth_width": 1280,
+                "depth_height": 720,
+                "color_width": 1280,
+                "color_height": 720,
+                "pointcloud.enable": True,
+                "align_depth.enable": True,
+                "serial_no":"318122302525",
+                "depth_fps": 10,
+                "rgb_fps": 10,
+            }],
+            output='screen',
+            condition=IfCondition(LaunchConfiguration("test"))),
 
         # Launch visual odom for testing
         Node(
             package='rtabmap_odom', executable='rgbd_odometry', output='screen',
+            condition=IfCondition(LaunchConfiguration("test")),
             parameters=parameters,
             remappings=remappings),
+
  
         # Core SLAM node
         Node(
@@ -70,13 +87,13 @@ def generate_launch_description():
         # Visualization:
         Node(
             package='rtabmap_viz', executable='rtabmap_viz', output='screen',
-            condition=IfCondition(LaunchConfiguration("rtabmap_viz")),
+            condition=IfCondition(LaunchConfiguration("viz")),
             parameters=parameters,
             remappings=remappings),
             
         Node(
             package='rviz2', executable='rviz2', name="rviz2", output='screen',
-            condition=IfCondition(LaunchConfiguration("rviz")),
+            condition=IfCondition(LaunchConfiguration("viz")),
             arguments=[["-d"], [LaunchConfiguration("rviz_cfg")]]),
             # RViz Subscribed Topics
                 #   /map

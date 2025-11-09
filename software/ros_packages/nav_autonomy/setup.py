@@ -19,7 +19,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Nav Autonomy Capstone',
-    maintainer_email='TODO',
+    maintainer_email='jagelsky@oregonstate.edu',
     description='Package for autonomous mapping and navigation',
     license='TODO: License',
     extras_require={

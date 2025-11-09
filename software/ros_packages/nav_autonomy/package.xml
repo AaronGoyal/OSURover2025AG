@@ -4,7 +4,7 @@
   <name>nav_autonomy</name>
   <version>0.0.0</version>
   <description>Package for autonomous mapping and navigation</description>
-  <maintainer email="TODO">Nav Autonomy Capstone</maintainer>
+  <maintainer email="jagelsky@oregonstate.edu">Nav Autonomy Capstone</maintainer>
   <license>TODO: License</license>
 
   <exec_depend>ros2launch</exec_depend>

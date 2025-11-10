@@ -20,7 +20,35 @@ def generate_launch_description():
     gazebo_params = os.path.join(pkg_share, 'config', 'gazebo_params.yaml')
     twist_mux_params = os.path.join(pkg_share, 'config', 'twist_mux.yaml')
     nav2_params = os.path.join(pkg_share, 'config', 'rgbd_nav2_params.yaml')
-    rtabmap_params = os.path.join(pkg_share, 'config', 'rtabmap_params.yaml')
+    #rtabmap_params = os.path.join(pkg_share, 'config', 'rtabmap_params.yaml')
+    rtabmap_params = {
+        'use_sim_time': use_sim_time,
+        'frame_id':'base_link',
+        #'publish_tf': True,
+        #'odometry_frame_id': 'odom',
+        'subscribe_depth': True,
+        #'subscribe_rgbd': True,
+        #'subscribe_scan': True,
+        'use_action_for_goal': True,
+        'approx_sync': True,
+        #'Rtabmap/PublishGrid': 'true',
+        #'RGBD/PublishCloud': 'true',
+        'Reg/Force3DoF': 'true',
+        #'Grid/FromDepth': 'true',
+        'Grid/RayTracing': 'true', # Fill empty space
+        'Grid/3D': 'false', # Use 2D occupancy
+        'Grid/RangeMax': '3',
+        'Grid/NormalsSegmentation':'false', # Use passthrough filter to detect obstacles
+        'Grid/MaxGroundHeight': '0.05', # All points above 5 cm are obstacles
+        'Grid/MaxObstacleHeight': '0.4',  # All points over 1 meter are ignored
+        'Optimizer/GravitySigma': '0' # Disable imu constraints (we are already in 2D)
+    }
+    rtabmap_remaps = [
+        ('rgb/image', '/camera_depth/image_raw'),
+        ('rgb/camera_info', '/camera_depth/depth/camera_info'),
+        ('depth/image', '/camera_depth/depth/image_raw'),
+    ]
+
     rviz_config = os.path.join(pkg_share, 'rviz', 'depth_nav.rviz')
 
     rsp = IncludeLaunchDescription(
@@ -75,24 +103,54 @@ def generate_launch_description():
     #     )
     #)
     
-    rtabmap = Node(
+    rtabmap_slam = Node(
         package='rtabmap_slam', executable='rtabmap', 
         name='rtabmap',
-        parameters=[rtabmap_params, {'use_sim_time': use_sim_time}],
+        parameters=[rtabmap_params],
+        remappings=rtabmap_remaps,
+        arguments=['-d'],
         output='screen',
     )
 
     rtabmnap_odom = Node(
         package='rtabmap_odom', executable='rgbd_odometry',
         name='rgbd_odometry',
-        parameters=[{'use_sim_time': use_sim_time}],
-        remappings=[
-            ("/rgb/image", "/camera_depth/image_raw"),
-            ("/depth/image", "/camera_depth/depth/image_raw"),
-            ("/rgb/camera_info", "/camera_depth/camera_info")
-        ],
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'approx_sync': True,
+            'wait_imu_to_init': True,
+            #'Odom/ResetCountdown': 1,
+        }],
+        remappings=rtabmap_remaps,
         output='screen',
     )
+
+    rtabmap_viz = Node(
+        package='rtabmap_viz', executable='rtabmap_viz',
+        parameters=[rtabmap_params],
+        remappings=rtabmap_remaps,
+        output='screen',
+    )
+
+    # Obstacle detection with the camera for nav2 local costmap.
+    # First, we need to convert depth image to a point cloud.
+    # Second, we segment the floor from the obstacles.
+    rtabmap_point_cloud = Node(
+        package='rtabmap_util', executable='point_cloud_xyz', output='screen',
+        parameters=[{'decimation': 2,
+                     'max_depth': 10.0,
+                     'voxel_size': 0.02}],
+        remappings=[('depth/image', '/camera_depth/depth/image_raw'),
+                    ('depth/camera_info', '/camera_depth/depth/camera_info'),
+                    ('cloud', '/camera/cloud')])
+    
+    rtabmap_obstacles = Node(
+        package='rtabmap_util', executable='obstacles_detection', output='screen',
+        parameters=[rtabmap_params],
+        remappings=[('cloud', '/camera/cloud'),
+                    ('obstacles', '/camera/obstacles'),
+                    ('ground', '/camera/ground')])
+
 
     joystick = IncludeLaunchDescription(
             PythonLaunchDescriptionSource([os.path.join(
@@ -126,60 +184,15 @@ def generate_launch_description():
     spawn_slam_nav_after_entity = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=spawn_entity,
-            on_exit=[rtabmap, rtabmnap_odom, nav2]
+            on_exit=[
+                rtabmap_slam,
+                rtabmnap_odom, 
+                rtabmap_point_cloud,
+                rtabmap_obstacles,
+                nav2
+            ]
         )
     )
-
-    # turtlebot3_rgbd launch 
-    parameters={
-        'frame_id':'base_footprint',
-        'use_sim_time': use_sim_time,
-        'subscribe_depth':True,
-        'subscribe_rgb':True,
-        'subscribe_scan':False,
-
-        'use_action_for_goal':True,
-        'Reg/Force3DoF':'true',
-        'Grid/RayTracing':'true', # Fill empty space
-        'Grid/3D':'false', # Use 2D occupancy
-        'Grid/RangeMax':'10.0', # Max obstacle detection range (meters)
-        'Grid/NormalsSegmentation':'false', # Use passthrough filter to detect obstacles
-        'Grid/MaxGroundHeight':'0.05', # All points above 5 cm are obstacles
-        'Grid/MaxObstacleHeight':'0.4',  # All points over 1 meter are ignored
-        'Optimizer/GravitySigma':'0' # Disable imu constraints (we are already in 2D)
-    }
-
-    remappings=[
-        ('rgb/image', '/camera/image_raw'),
-        ('rgb/camera_info', '/camera/camera_info'),
-        ('depth/image', '/camera/depth/image_raw')]
-
-
-    rtabmap_viz = Node(
-        package='rtabmap_viz', executable='rtabmap_viz',
-        parameters=[parameters],
-        remappings=remappings,
-        output='screen',
-    )
-
-    # Obstacle detection with the camera for nav2 local costmap.
-    # First, we need to convert depth image to a point cloud.
-    # Second, we segment the floor from the obstacles.
-    # rtabmap_point_cloud = Node(
-    #     package='rtabmap_util', executable='point_cloud_xyz', output='screen',
-    #     parameters=[{'decimation': 2,
-    #                  'max_depth': 10.0,
-    #                  'voxel_size': 0.02}],
-    #     remappings=[('depth/image', '/camera/depth/image_raw'),
-    #                 ('depth/camera_info', '/camera/camera_info'),
-    #                 ('cloud', '/camera/cloud')])
-    #
-    # rtabmap_obstacles = Node(
-    #     package='rtabmap_util', executable='obstacles_detection', output='screen',
-    #     parameters=[parameters],
-    #     remappings=[('cloud', '/camera/cloud'),
-    #                 ('obstacles', '/camera/obstacles'),
-    #                 ('ground', '/camera/ground')])
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true', description='Use simulation (Gazebo) clock if true'),
@@ -193,14 +206,14 @@ def generate_launch_description():
         joystick,
         spawn_controllers_after_entity,
         spawn_slam_nav_after_entity,
+        rtabmap_viz,
+
         #diff_drive_controller_spawner,
         #joint_state_broadcaster_spawner,
         #delayed_ddc_spawner,
         #delayed_jsb_spawner,
-        #rtabmap,
         #rtabmap_slam,
         #rtabmap_localization,
-        #rtabmap_viz,
         #rtabmap_point_cloud,
         #rtabmap_obstacles
     ])

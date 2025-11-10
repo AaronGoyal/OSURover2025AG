@@ -9,7 +9,7 @@ from launch.substitutions import LaunchConfiguration, Command
 
 def generate_launch_description():
 
-    package_name='auto_bot'
+    package_name='nav_autonomy_sim'
     ros2_control = LaunchConfiguration('ros2_control')
 
     rsp = IncludeLaunchDescription(

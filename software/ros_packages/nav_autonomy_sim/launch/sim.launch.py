@@ -14,7 +14,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time', default='true') 
     localization = LaunchConfiguration('localization', default='false')
 
-    package_name='auto_bot'
+    package_name='nav_autonomy_sim'
     pkg_share = get_package_share_directory(package_name)
 
     gazebo_params = os.path.join(pkg_share, 'config', 'gazebo_params.yaml')

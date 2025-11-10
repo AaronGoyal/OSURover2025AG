@@ -8,7 +8,7 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
 
-    pkg_name = 'auto_bot'
+    pkg_name = 'nav_autonomy_sim'
     drive_controller = 'diff_drive_controller'
 
     use_sim_time = LaunchConfiguration('use_sim_time')

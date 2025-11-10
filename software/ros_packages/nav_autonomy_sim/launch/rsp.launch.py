@@ -15,7 +15,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     ros2_control = LaunchConfiguration('ros2_control')
 
-    pkg_path = os.path.join(get_package_share_directory('auto_bot'))
+    pkg_path = os.path.join(get_package_share_directory('nav_autonomy_sim'))
     xacro_file = os.path.join(pkg_path,'description','robot.urdf.xacro')
     # robot_description_config = xacro.process_file(xacro_file).toxml()
     robot_description_config = Command(['xacro ', xacro_file, ' ros2_control:=', ros2_control])

@@ -251,6 +251,7 @@ def generate_launch_description():
             #sensor_yaml,
             # octomap_config,
             # octomap_updater_config,
+            kinematics_yaml,
         ],
         output="screen",
     )
@@ -281,7 +282,7 @@ def generate_launch_description():
             "align_depth.enable": True,
             #"enable_rgbd": True,
             "decimation_filter": True,
-            "decimation_filter.filter_magnitude": 4.0,
+            "decimation_filter.filter_magnitude": 4,
             "enable_sync": True,
             "pointcloud.stream_filter": 2,
             # "enable_color": True,

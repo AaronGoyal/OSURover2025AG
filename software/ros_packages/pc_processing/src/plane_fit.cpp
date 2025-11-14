@@ -119,20 +119,20 @@ private:
 		float c = coefficients->values[2];
 		float d = coefficients->values[3];
 		
-		//Four static xz pairs to evaluate for y at
+		//Four static xy pairs to evaluate for z at
 		std::vector<Point> plane_points = {Point(),Point(),Point(),Point(),Point()};
-		plane_points[0].x = -1;
-		plane_points[0].z = 0.5;
-		plane_points[1].x = 1;
-		plane_points[1].z = 0.5;
-		plane_points[2].x = 1;
-		plane_points[2].z = 2;
-		plane_points[3].x = -1;
-		plane_points[3].z = 2;
+		plane_points[0].x = -0.5;
+		plane_points[0].y = -0.5;
+		plane_points[1].x = 0.5;
+		plane_points[1].y = -0.5;
+		plane_points[2].x = 0.5;
+		plane_points[2].y = 0.5;
+		plane_points[3].x = -0.5;
+		plane_points[3].y = 0.5;
 		plane_points[4] = plane_points[0];
-		//evaluate each for y
+		//evaluate each for z
 		for(int i=0; i<=4; i++){
-			plane_points[i].y = (-d-a*plane_points[i].x-c*plane_points[i].z)/b;
+			plane_points[i].z = (-d-a*plane_points[i].x-b*plane_points[i].y)/c;
 		}
 
 		//TBH, it would probably have been easier to just find the centroid of the table points, determine the proper rotation angle using the 
@@ -142,7 +142,7 @@ private:
 		Marker plane_marker;
 
 		//plane_marker.header.frame_id = "/quori/head_camera_optical"; //Old HW Rosbag Frame
-		plane_marker.header.frame_id = "/arm_gripper"; //Rover D405 Frame
+		plane_marker.header.frame_id = "/base_link"; //Rover D405 Frame
 		plane_marker.header.stamp = rclcpp::Clock().now();
 
 		plane_marker.pose.position.x = 0;

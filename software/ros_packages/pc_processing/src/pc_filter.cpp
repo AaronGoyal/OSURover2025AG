@@ -17,6 +17,13 @@
 
 #include <pcl/filters/crop_box.h>
 
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
+
+#include <memory>
+
 //Placeholders for callback binding:
 using std::placeholders::_1;
 
@@ -29,7 +36,10 @@ public:
 	using PointCloud2 = sensor_msgs::msg::PointCloud2;
 
 	//(I Think)This needs to be public because it's used to construct the class
-	CountObjects() : Node("pc_filter") {
+	CountObjects() : Node("pc_filter"),
+		tf_buffer_(std::make_unique<tf2_ros::Buffer>(this->get_clock())),
+		tf_listener_(std::make_shared<tf2_ros::TransformListener>(*tf_buffer_)),
+		target_frame_("base_link") {
 		
 		//Subscribe to the rosbag stream
 		subscriber_ = this->create_subscription<PointCloud2>("raw_point_cloud", 5, std::bind(&CountObjects::sub_callback, this, _1));
@@ -46,6 +56,9 @@ private:
 	//Class variable prototypes, 2 pass compiler blah blah
 	rclcpp::Publisher<PointCloud2>::SharedPtr publisher_;
 	rclcpp::Subscription<PointCloud2>::SharedPtr subscriber_;
+	std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+	std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+	std::string target_frame_;
 
 	//Where the magic is supposed to happen...
 	void sub_callback(const PointCloud2::SharedPtr msg) {
@@ -63,8 +76,8 @@ private:
 		float x_max = 2.0;
 		float y_min = -2.0;
 		float y_max = 0.4;
-		float z_min = -1.0;
-		float z_max = 2.0;
+		float z_min = -1;
+		float z_max = 1;
 
 		//Create the cropbox filter:
 		pcl::CropBox<pcl::PointXYZRGB> box_filter;
@@ -82,8 +95,20 @@ private:
 		pcl::toROSMsg(*pcl_cloud_trunc, msg_out);
 		msg_out.header = msg->header;
 
+		//Transform the truncated cloud into the target frame
+		sensor_msgs::msg::PointCloud2 cloud_in_target;
+		try {
+			geometry_msgs::msg::TransformStamped transform_stamped = tf_buffer_->lookupTransform(
+				target_frame_, msg_out.header.frame_id, msg_out.header.stamp);
+			tf2::doTransform(msg_out, cloud_in_target, transform_stamped);
+		} catch (const tf2::TransformException &ex) {
+			RCLCPP_WARN(this->get_logger(), "Could not transform %s to %s: %s",
+				msg_out.header.frame_id.c_str(), target_frame_.c_str(), ex.what());
+			return;
+		}
+
 		//Publish and log the result:
-		this->publisher_->publish(msg_out);
+		this->publisher_->publish(cloud_in_target);
 		RCLCPP_INFO(this->get_logger(), "point cloud truncated.");
 
 	}

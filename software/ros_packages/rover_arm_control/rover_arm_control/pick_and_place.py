@@ -5,22 +5,23 @@ from rclpy.action import ActionClient
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 
-
-from geometry_msgs.msg import TwistStamped, Twist
+from geometry_msgs.msg import TwistStamped, Twist, PoseStamped
 from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
 from rcl_interfaces.srv import SetParameters
-from sensor_msgs.msg import JointState
+from sensor_msgs.msg import JointState, Joy
+from std_srvs.srv import Trigger, Empty
+from controller_manager_msgs.srv import SwitchController
 
-
+from tf2_ros import Buffer, TransformListener
 
 #moveit stuff
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import Constraints, JointConstraint, RobotState
 from moveit_msgs.msg import MotionPlanRequest, PlanningOptions
 
-from sensor_msgs.msg import Joy
+#custom action call
+from rover_arm_control_interface.action import RelativeMove
 
-from controller_manager_msgs.srv import SwitchController
 
 
 #python stuff
@@ -31,6 +32,8 @@ class SquareMakingController(Node):
     def __init__(self):
         super().__init__('square_maker')
         self.get_clock().now()
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
         self.cb_group = MutuallyExclusiveCallbackGroup()
 
 
@@ -40,7 +43,20 @@ class SquareMakingController(Node):
         self.move_group_client.wait_for_server()
         self.get_logger().info('MoveGroup action server connected!')
 
+        self.relative_move_client = ActionClient(self, RelativeMove, 'relative_move')
+        self.get_logger().info('Waiting for RelativeMove action server...')
+        self.relative_move_client.wait_for_server()
+        self.get_logger().info('RelativeMove action server connected!')
+
+        self.absolute_move_client = ActionClient(self, RelativeMove, 'absolute_move')
+        self.get_logger().info('Waiting for AbsoluteMove action server...')
+        self.absolute_move_client.wait_for_server()
+        self.get_logger().info('AbsoluteMove action server connected!')
+
+
         self.controller_client = self.make_client(SwitchController, '/controller_manager/switch_controller')
+        self.configure_servo_cli = self.make_client(SetParameters, '/servo_node/set_parameters')
+        self.start_servo_client = self.make_client(Trigger, '/servo_node/start_servo')
         self.configure_servo_cli = self.make_client(SetParameters, '/servo_node/set_parameters')
 
         #Publishers
@@ -66,14 +82,23 @@ class SquareMakingController(Node):
 
         #define scan params
         self.sequence = {"down":"right", "right":"up", "up":"left", "left":"down"}
-        self.dir_def = {"down":[0.0,-0.05], "right":[-0.05,0.0], "up":[0.0,0.05], "left":[0.05, 0.0]}
-        self.dir_time = {"down":2000, "right":4000, "up":2000, "left":4000}
+        self.dir_def = {"down":[0.0,-0.1], "right":[-0.1,0.0], "up":[0.0,0.1], "left":[0.1, 0.0]}
+        self.dir_time = {"down":4000, "right":8000, "up":4000, "left":8000}
         self.curr_dir = "down"
         self.loops = 0
         self.cycles = 0
 
+        self.sq_keys = ["down", "right", "up", "left"]
+        self.scan_iter = 0
+        self.square_dict = {
+            "down" : self.make_posestamped([0.0, -0.25, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            "up" : self.make_posestamped([0.0, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            "right" : self.make_posestamped([0.75, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            "left" : self.make_posestamped([-0.75 ,0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        }
+
         #Arm params
-        self.frame_id = "arm_gripper"
+        self.frame_id = "arm_gripper" # usually "arm_gripper"
         self.joint_names = ['base_joint', 'shoulder_joint', 'elbow_pitch_joint', 
                   'elbow_roll_joint', 'wrist_pitch_joint', 'wrist_roll_joint']
 
@@ -148,6 +173,14 @@ class SquareMakingController(Node):
     def joint_states_callback(self, msg):
         self.latest_joint_state = msg
 
+    def start_servo(self):
+        # Starts servo node
+        self.request = Trigger.Request()
+        self.future = self.start_servo_client.call_async(self.request)
+        rclpy.spin_until_future_complete(self, self.future) 
+        return self.future.result()
+    
+
     def move_to_joint_positions(self, joint_pose):
         """"Move arm to a set of joint angles.
 
@@ -186,8 +219,8 @@ class SquareMakingController(Node):
             joint_constraint = JointConstraint()
             joint_constraint.joint_name = joint_name
             joint_constraint.position = joint_pose[i]
-            joint_constraint.tolerance_above = 0.01  # radians
-            joint_constraint.tolerance_below = 0.01  # radians
+            joint_constraint.tolerance_above = 0.0001  # radians
+            joint_constraint.tolerance_below = 0.0001  # radians
             joint_constraint.weight = 1.0
             
             # Add the joint constraint to the goal constraints
@@ -213,7 +246,8 @@ class SquareMakingController(Node):
         goal_msg.planning_options = planning_options
         
         # Send the goal
-        self.get_logger().info(f'Sending goal to move joints {self.joint_names} to positions {joint_pose}')
+        self.get_logger().info("Sending goal to move joints")
+        # self.get_logger().info(f'Sending goal to move joints {self.joint_names} to positions {joint_pose}')
         send_goal_future = self.move_group_client.send_goal_async(goal_msg)
         self.sent_goal = True
         
@@ -246,73 +280,155 @@ class SquareMakingController(Node):
             self.get_logger().error(f'Motion execution failed with status: {status}')
             self.move_success = False
 
+    def make_square(self, direction):
+        """
+        """
+        self.move_success = False
+        
+        self.get_logger().info(f"sent: {direction}")
+        goal_msg = RelativeMove.Goal()
+        goal_msg.relative_pose = self.square_dict[direction]
+        send_goal_future = self.relative_move_client.send_goal_async(goal_msg)
+        send_goal_future.add_done_callback(self.goal_response_callback)
+        self.sent_goal = True
+
+    def move_to_absolute_pose(self, pose):
+        self.move_success = False
+
+        self.get_logger().info(f"sent pose")
+        goal_msg = RelativeMove.Goal()
+        goal_msg.relative_pose = pose
+        send_goal_future = self.absolute_move_client.send_goal_async(goal_msg)
+        send_goal_future.add_done_callback(self.goal_response_callback)
+        self.sent_goal = True
     
+    def make_posestamped(self, pose_arr):
+        pose = PoseStamped()
+        pose.header.frame_id = "base_link"
+        #set array to x,y,z pose positions
+        pose.pose.position.x = pose_arr[0]
+        pose.pose.position.y = pose_arr[1]
+        pose.pose.position.z = pose_arr[2]
+        #Set pose at 90 degree rotation along x
+        pose.pose.orientation.x = pose_arr[3]
+        pose.pose.orientation.y = pose_arr[4]
+        pose.pose.orientation.z = pose_arr[5]
+        pose.pose.orientation.w = pose_arr[6]  # Neutral orientation
+        return pose
+    
+    def get_EE_pose(self):
+        # Get the current pose of the gripper
+        current_pose = PoseStamped()
+        try:
+            trans = self.tf_buffer.lookup_transform(
+                "base_link",  # target frame
+                "arm_gripper",  # source frame
+                rclpy.time.Time())  # latest available
+
+            current_pose.header = trans.header
+            current_pose.pose.position.x = trans.transform.translation.x
+            current_pose.pose.position.y = trans.transform.translation.y
+            current_pose.pose.position.z = trans.transform.translation.z
+            current_pose.pose.orientation = trans.transform.rotation
+
+            # Now you have the current gripper pose
+            #self.get_logger().info(f"Gripper pose: {self.current_pose.pose}")
+        except Exception as e:
+            self.get_logger().error(f"Failed to lookup gripper pose: {str(e)}")
+        return current_pose
+
+
+
 
     def timer_callback(self): 
         #step 1 move to scan position
         if self.state == "start":
             #self.get_logger().info(f"{self.state}")
-            if self.servo:
-                self.get_logger().info("switch")
-                self.switch_controller(servo=False)
-                # time.sleep(0.1)
             start_scan_pose = [
-                -0.5284632853455362, 
-                -1.1027042707701618,  
-                -0.7785432468899975, 
-                -0.005995412834011991,
-                -1.2662599658015512, 
-                0.531499254831238
+                -0.54105207, 
+                -1.08210414,  
+                -0.80285146, 
+                -0.0,
+                -1.23918377, 
+                0.54105207
             ]
 
             #start_scan_pose = [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
             if not self.sent_goal:
-                self.get_logger().info("goal")
+                #self.get_logger().info("goal")
+                self.switch_controller(servo=False)
                 self.move_to_joint_positions(start_scan_pose)
-            if self.move_success:
+            elif self.move_success:
                 self.get_logger().info("goto scan")
                 self.state = "scan"
+                # pose = self.get_EE_pose()
+                # self.get_logger().info(f"EE Pose: position=({pose.pose.position.x:.3f}, {pose.pose.position.y:.3f}, {pose.pose.position.z:.3f}), "
+                #                     f"orientation=({pose.pose.orientation.x:.3f}, {pose.pose.orientation.y:.3f}, "
+                #                     f"{pose.pose.orientation.z:.3f}, {pose.pose.orientation.w:.3f})")
                 self.sent_goal = False
-
-
 
         #step 2 scan workspace
         if self.state == "scan":
-            if not self.servo:
-                self.switch_controller(servo=True)
-                # time.sleep(0.1)
+            # self.start_servo()
+            # self.switch_controller(servo=True)
 
-            #Draw a square
-            self.set_direction()
+            # #Draw a square
+            # self.set_direction()
 
-            msg = TwistStamped()
-            msg.header.stamp = self.get_clock().now().to_msg()
-            msg.header.frame_id = self.frame_id
-            msg.twist = self.construct_twist()
+            # msg = TwistStamped()
+            # msg.header.stamp = self.get_clock().now().to_msg()
+            # msg.header.frame_id = self.frame_id
+            # msg.twist = self.construct_twist()
+            # self.configure_servo(self.frame_id)
 
-            self.publisher_.publish(msg)
+            # self.publisher_.publish(msg)
 
-            if self.cycles > 1:
-                self.state = "move_to_input"
-                self.cycles = 0
+            # if self.cycles >= 1:
+            #     self.state = "move_to_input"
+            #     self.cycles = 0
 
+            # self.start_servo()
+            # self.switch_controller(servo=True)
+
+            #make square
+            if not self.sent_goal:
+                self.make_square(self.sq_keys[self.scan_iter])
+            elif self.move_success:
+                self.get_logger().info("next scan movement")
+                self.sent_goal = False
+                self.scan_iter += 1
+                if self.scan_iter > 3:
+                    self.get_logger().info("goto user input")
+                    self.scan_iter = 0
+                    self.state = "move_to_input"
 
         #step 3 move to get user input position
         if self.state == "move_to_input":
-            if self.servo:
-                self.switch_controller(servo=False)
-                # time.sleep(0.1)
-            input_pos =  [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
+            input_pos =  [0.0, -0.34, -1.98968, 0.0, 0.785398, 0.0]# stow [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0]# Ground pick up: [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
             if not self.sent_goal:
+                self.switch_controller(servo=False)
                 self.move_to_joint_positions(input_pos)
             if self.move_success:
+                self.get_logger().info("goto get pick input")
                 self.state = "get_pick_input"
                 self.sent_goal = False
 
 
         #step 4 get pick input
+        if self.state == "get_pick_input":
+            self.get_logger().info("goto object")
+            self.state = "move_to_object"
 
         #step 5 move to above object
+        if self.state == "move_to_object":
+            if not self.sent_goal:
+                object_pose = self.make_posestamped([0.0, 0.650, 0.304, 0.001, 1.000, 0.008, -0.005])
+                self.move_to_absolute_pose(object_pose)
+            elif self.move_success:
+                self.get_logger().info("goto approach")
+                self.sent_goal = False
+                time.sleep(0.25)
+                self.state = "home"
 
         #step 6 approach and pick
 
@@ -325,6 +441,17 @@ class SquareMakingController(Node):
         #step 10 place object
 
         #step 11 Return to user input
+
+        #step 12 Return to Home sometimes
+        if self.state == "home":
+            input_pos =  [0.0, 0.0, -0.0, 0.0, 0.0, 0.0]# stow [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0]# Ground pick up: [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
+            if not self.sent_goal:
+                self.switch_controller(servo=False)
+                self.move_to_joint_positions(input_pos)
+            if self.move_success:
+                self.get_logger().info("Done")
+                self.state = "Next"
+                self.sent_goal = False
 
     def set_direction(self):
 

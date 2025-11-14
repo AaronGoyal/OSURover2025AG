@@ -24,7 +24,11 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'pick_and_place = rover_arm_control.pick_and_place:main'
+            'pick_and_place = rover_arm_control.pick_and_place:main',
+            'relative_move = rover_arm_control.relative_move:main',
+            'absolute_move = rover_arm_control.absolute_move:main',
+            'test_service = rover_arm_control.test_service:main',
+            'test_action = rover_arm_control.test_action:main',
         ],
     },
 )

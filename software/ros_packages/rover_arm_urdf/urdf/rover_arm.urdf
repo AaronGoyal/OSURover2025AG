@@ -147,6 +147,9 @@
     </inertial>
   </link>
 
+  <link name="jaws_link">
+  </link>
+
 
 
   <joint name="base_joint" type="revolute">
@@ -203,6 +206,12 @@
     <origin rpy="0 0 0" xyz="-0.050 0 0.050484"/>
     <axis xyz="0 0 1"/>
     <limit effort="1000.0" velocity="60.0"/>
+  </joint>
+
+  <joint name="gripper_jaws" type="fixed">
+    <parent link = "arm_gripper"/>
+    <child link = "jaws_link"/> 
+    <origin rpy="0 0 0" xyz="0 0 0.10"/>
   </joint>
 
 </robot>

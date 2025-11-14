@@ -14,7 +14,7 @@
   
     <!-- Instantiate micros  -->
     <xacro:sensor_d405 parent ="arm_gripper" name="d405" use_nominal_extrinsics="true">
-        <origin xyz="0 0.05 0.1" rpy="-1.5707 -1.5707 0"/>
+        <origin xyz="0 0.04075 0.1" rpy="0 -1.3963 -1.5708"/> 
     </xacro:sensor_d405>
 
     <!-- Chassis Depth Camera -->

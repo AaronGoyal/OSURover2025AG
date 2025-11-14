@@ -23,6 +23,9 @@ find_package(visualization_msgs REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(rclcpp_components REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 # We need this to make the PCL stuff work.
 include_directories(${PCL_INCLUDE_DIRS})
@@ -32,7 +35,7 @@ add_definitions(${PCL_DEFINITIONS})
 # Add in the executables.
 add_executable(pc_filter src/pc_filter.cpp)
 target_link_libraries(pc_filter ${PCL_LIBRARIES})
-ament_target_dependencies(pc_filter rclcpp sensor_msgs pcl_ros pcl_conversions) #Include ros, sensor_msgs, pcl libraries as dependencies
+ament_target_dependencies(pc_filter rclcpp sensor_msgs pcl_ros pcl_conversions tf2_ros tf2_sensor_msgs geometry_msgs) #Include ros, sensor_msgs, pcl libraries as dependencies
 
 add_executable(plane_fit src/plane_fit.cpp)
 target_link_libraries(plane_fit ${PCL_LIBRARIES})

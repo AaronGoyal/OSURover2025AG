@@ -1,3 +1,17 @@
+"""
+Relative Move Node
+DAM Robotics
+Authors: Jared Northrop
+Year: 2526
+
+This node implement the full moveit trajectory pipeline for relative end-effector movements. 
+
+Notes
+-----
+Currently (11/17/25) relative orientation is not implemented and orientation is held fixed during movements.
+In the current implementation this means that the end-effector will maintain its start or current 
+orientation throughout the move. 
+"""
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
@@ -8,6 +22,8 @@ from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import Constraints, JointConstraint, RobotState, PositionConstraint, OrientationConstraint
 from moveit_msgs.msg import MotionPlanRequest, PlanningOptions, BoundingVolume, MoveItErrorCodes
 import moveit_msgs.msg
+from moveit_msgs.srv import GetPlanningScene
+
 from geometry_msgs.msg import TwistStamped, Twist, PointStamped, Quaternion
 from builtin_interfaces.msg import Duration
 from shape_msgs.msg import SolidPrimitive
@@ -47,6 +63,8 @@ class GripperMoveNode(Node):
 
         self.controller_client = self.make_client(SwitchController, '/controller_manager/switch_controller')
         self.start_servo_client = self.make_client(Trigger, '/servo_node/start_servo')
+        self.planning_scene_client = self.make_client(GetPlanningScene, '/get_planning_scene')
+
 
 
    
@@ -292,6 +310,15 @@ class GripperMoveNode(Node):
         result.position.z = current.position.z + p_rel_rot[2]
 
         return result
+    
+    def get_current_robot_state(self) -> RobotState:
+        req = GetPlanningScene.Request()
+        # Empty request returns full scene including current robot state
+        future = self.planning_scene_client.call_async(req)
+        rclpy.spin_until_future_complete(self, future)
+
+        scene = future.result().scene
+        return scene.robot_state
 
     def create_motion_request(self):
         #create motion planning request
@@ -320,7 +347,7 @@ class GripperMoveNode(Node):
         #set planning params
         motion_request.max_velocity_scaling_factor = 0.5
         motion_request.max_acceleration_scaling_factor = 0.5
-        motion_request.allowed_planning_time = 5.0
+        motion_request.allowed_planning_time = 2.0
         motion_request.num_planning_attempts = 10
 
         #Initialize Constraints

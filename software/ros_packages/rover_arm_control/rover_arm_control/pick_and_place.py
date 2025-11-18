@@ -1,3 +1,12 @@
+"""
+Pick and Place Node
+DAM Robotics
+Authors: Jared Northrop
+Year: 2526
+
+This node implements a pick and place routine with object selection via human input through pointing an Aruco
+marker. This has been built for ROB514 Introduction to Robotics course project. 
+"""
 import rclpy
 from rclpy.node import Node
 
@@ -20,7 +29,7 @@ from moveit_msgs.msg import Constraints, JointConstraint, RobotState
 from moveit_msgs.msg import MotionPlanRequest, PlanningOptions
 
 #custom action call
-from rover_arm_control_interface.action import RelativeMove
+from rover_arm_control_interface.action import RelativeMove, GripperControl
 
 
 
@@ -53,6 +62,11 @@ class SquareMakingController(Node):
         self.absolute_move_client.wait_for_server()
         self.get_logger().info('AbsoluteMove action server connected!')
 
+        self.gripper_control_client = ActionClient(self, GripperControl, 'gripper_control')
+        self.get_logger().info('Waiting for GripperControl action server...')
+        self.absolute_move_client.wait_for_server()
+        self.get_logger().info('GripperControl action server connected!')
+
 
         self.controller_client = self.make_client(SwitchController, '/controller_manager/switch_controller')
         self.configure_servo_cli = self.make_client(SetParameters, '/servo_node/set_parameters')
@@ -71,7 +85,7 @@ class SquareMakingController(Node):
             10)
 
         #timers
-        self.timer = self.create_timer(0.002, self.timer_callback)
+        self.timer = self.create_timer(0.03, self.timer_callback)
 
         #state params
         self.state = "start"
@@ -101,6 +115,9 @@ class SquareMakingController(Node):
         self.frame_id = "arm_gripper" # usually "arm_gripper"
         self.joint_names = ['base_joint', 'shoulder_joint', 'elbow_pitch_joint', 
                   'elbow_roll_joint', 'wrist_pitch_joint', 'wrist_roll_joint']
+        
+        #Visual segmentation params
+        self.object_pose = PoseStamped()
 
     def make_client(self, srv_type, name):
         """ Create a client to a service.
@@ -279,6 +296,7 @@ class SquareMakingController(Node):
         else:
             self.get_logger().error(f'Motion execution failed with status: {status}')
             self.move_success = False
+        self.get_logger().info(f"Latest joint states: {self.latest_joint_state.position}")
 
     def make_square(self, direction):
         """
@@ -292,6 +310,16 @@ class SquareMakingController(Node):
         send_goal_future.add_done_callback(self.goal_response_callback)
         self.sent_goal = True
 
+    def gripper_control(self, close=True):
+        self.move_success = False
+
+        self.get_logger().info(f"sent gripper command close = {close}")
+        goal_msg = GripperControl.Goal()
+        goal_msg.close = close
+        send_goal_future = self.gripper_control_client.send_goal_async(goal_msg)
+        send_goal_future.add_done_callback(self.goal_response_callback)
+        self.sent_goal = True
+
     def move_to_absolute_pose(self, pose):
         self.move_success = False
 
@@ -299,6 +327,15 @@ class SquareMakingController(Node):
         goal_msg = RelativeMove.Goal()
         goal_msg.relative_pose = pose
         send_goal_future = self.absolute_move_client.send_goal_async(goal_msg)
+        send_goal_future.add_done_callback(self.goal_response_callback)
+        self.sent_goal = True
+    def move_to_relative_pose(self, pose):
+        self.move_success = False
+
+        self.get_logger().info(f"sent pose")
+        goal_msg = RelativeMove.Goal()
+        goal_msg.relative_pose = pose
+        send_goal_future = self.relative_move_client.send_goal_async(goal_msg)
         send_goal_future.add_done_callback(self.goal_response_callback)
         self.sent_goal = True
     
@@ -356,6 +393,7 @@ class SquareMakingController(Node):
             #start_scan_pose = [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
             if not self.sent_goal:
                 #self.get_logger().info("goal")
+                time.sleep(0.5)
                 self.switch_controller(servo=False)
                 self.move_to_joint_positions(start_scan_pose)
             elif self.move_success:
@@ -392,6 +430,7 @@ class SquareMakingController(Node):
 
             #make square
             if not self.sent_goal:
+                time.sleep(0.5)
                 self.make_square(self.sq_keys[self.scan_iter])
             elif self.move_success:
                 self.get_logger().info("next scan movement")
@@ -404,8 +443,9 @@ class SquareMakingController(Node):
 
         #step 3 move to get user input position
         if self.state == "move_to_input":
-            input_pos =  [0.0, -0.34, -1.98968, 0.0, 0.785398, 0.0]# stow [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0]# Ground pick up: [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
+            input_pos =  [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0] #front facing [0.0, -0.34, -1.98968, 0.0, 0.785398, 0.0]# stow [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0]# Ground pick up: [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
             if not self.sent_goal:
+                time.sleep(0.5)
                 self.switch_controller(servo=False)
                 self.move_to_joint_positions(input_pos)
             if self.move_success:
@@ -417,35 +457,136 @@ class SquareMakingController(Node):
         #step 4 get pick input
         if self.state == "get_pick_input":
             self.get_logger().info("goto object")
-            self.state = "move_to_object"
+            self.state = "move_to_pick_mobility"
+
+        #step 4.5 move to movement position
+        if self.state == "move_to_pick_mobility":
+            input_pos =  [0.0, -0.34, -1.98968, 0.0, 0.785398, 0.0]# stow [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0]# Ground pick up: [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
+            if not self.sent_goal:
+                time.sleep(0.5)
+                self.switch_controller(servo=False)
+                self.move_to_joint_positions(input_pos)
+            if self.move_success:
+                self.get_logger().info("goto move to object")
+                self.state = "move_to_object"
+                self.sent_goal = False
+
 
         #step 5 move to above object
         if self.state == "move_to_object":
             if not self.sent_goal:
-                object_pose = self.make_posestamped([0.0, 0.650, 0.304, 0.001, 1.000, 0.008, -0.005])
-                self.move_to_absolute_pose(object_pose)
+                time.sleep(0.500)
+                self.object_pose = self.make_posestamped([0.0, 0.650, 0.304, 0.001, 1.000, 0.008, -0.005])
+                self.move_to_absolute_pose(self.object_pose)
             elif self.move_success:
                 self.get_logger().info("goto approach")
                 self.sent_goal = False
                 time.sleep(0.25)
-                self.state = "home"
+                self.state = "approach"
 
-        #step 6 approach and pick
-
+        #step 6 approach
+        if self.state == "approach":
+            if not self.sent_goal:
+                time.sleep(0.500)
+                approach_pose = self.make_posestamped([0.0, 0.0, -0.09, 0.0, 0.0, 0.0, 0.0, 0.0])
+                self.move_to_relative_pose(approach_pose)
+            elif self.move_success:
+                self.get_logger().info("Goto pick")
+                self.sent_goal = False
+                time.sleep(0.25)
+                self.state = "pick"
+            
+        #step 6.5 pick
+        if self.state == "pick":
+            if not self.sent_goal:
+                time.sleep(0.500)
+                self.gripper_control(close=True)
+            elif self.move_success:
+                self.get_logger().info("Goto move to place input")
+                self.sent_goal = False
+                time.sleep(0.25)
+                self.state = "move_to_place_input"
         #step 7 move to user input position
+        if self.state == "move_to_place_input":
+            input_pos =  [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0] #front facing [0.0, -0.34, -1.98968, 0.0, 0.785398, 0.0]# stow [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0]# Ground pick up: [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
+            if not self.sent_goal:
+                time.sleep(0.5)
+                self.switch_controller(servo=False)
+                self.move_to_joint_positions(input_pos)
+            if self.move_success:
+                self.get_logger().info("goto get pick input")
+                self.state = "get_placd_input"
+                self.sent_goal = False
 
         #step 8 get place input
+        if self.state == "get_placd_input":
+            self.get_logger().info("goto place location")
+            self.state = "move_to_place_mobility"
+        
+        #step 8.5 move to place mobility
+        if self.state == "move_to_place_mobility":
+            input_pos =  [0.0, -0.34, -1.98968, 0.0, 0.785398, 0.0]# stow [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0]# Ground pick up: [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
+            if not self.sent_goal:
+                time.sleep(0.5)
+                self.switch_controller(servo=False)
+                self.move_to_joint_positions(input_pos)
+            if self.move_success:
+                self.get_logger().info("goto move above place location")
+                self.state = "move_above_place_location"
+                self.sent_goal = False
 
         #step 9 move to above place
-
+        if self.state == "move_above_place_location":
+            if not self.sent_goal:
+                time.sleep(0.500)
+                self.object_pose = self.make_posestamped([0.0, 0.650, 0.304, 0.001, 1.000, 0.008, -0.005])
+                self.move_to_absolute_pose(self.object_pose)
+            elif self.move_success:
+                self.get_logger().info("goto place")
+                self.sent_goal = False
+                time.sleep(0.25)
+                self.state = "place_approach"
+        
         #step 10 place object
+        if self.state == "place_approach":
+            if not self.sent_goal:
+                time.sleep(0.500)
+                approach_pose = self.make_posestamped([0.0, 0.0, -0.09, 0.0, 0.0, 0.0, 0.0, 0.0])
+                self.move_to_relative_pose(approach_pose)
+            elif self.move_success:
+                self.get_logger().info("Goto place")
+                self.sent_goal = False
+                time.sleep(0.25)
+                self.state = "place"
+
+        #step 10.5 place
+        if self.state == "place":
+            if not self.sent_goal:
+                time.sleep(0.500)
+                self.gripper_control(close=False)
+            elif self.move_success:
+                self.get_logger().info("goto sudo home position")
+                self.sent_goal = False
+                time.sleep(0.25)
+                self.state = "sudo_home"
 
         #step 11 Return to user input
+        if self.state == "sudo_home":
+            input_pos =  [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0]# stow [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0]# Ground pick up: [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
+            if not self.sent_goal:
+                time.sleep(0.5)
+                self.switch_controller(servo=False)
+                self.move_to_joint_positions(input_pos)
+            if self.move_success:
+                self.get_logger().info("Done")
+                self.state = "start"
+                self.sent_goal = False
 
         #step 12 Return to Home sometimes
         if self.state == "home":
             input_pos =  [0.0, 0.0, -0.0, 0.0, 0.0, 0.0]# stow [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0]# Ground pick up: [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
             if not self.sent_goal:
+                time.sleep(0.5)
                 self.switch_controller(servo=False)
                 self.move_to_joint_positions(input_pos)
             if self.move_success:

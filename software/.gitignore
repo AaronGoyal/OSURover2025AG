@@ -4,6 +4,7 @@ build
 install
 log
 rosbags
+*.db3
 __pycache__
 ./react_groundstation
 

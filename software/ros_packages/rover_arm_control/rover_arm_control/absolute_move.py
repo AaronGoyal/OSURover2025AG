@@ -1,3 +1,19 @@
+"""
+Relative Move Node
+DAM Robotics
+Authors: Jared Northrop
+Year: 2526
+
+This node implement the full moveit trajectory pipeline for end-effector movements relative to the 
+base/world frame. 
+
+Notes
+-----
+There are no constraints on the movement and this may cause seemingly random arm movements to get to the 
+goal. 
+
+Current arm implementation aligns the base frame with the world. 
+"""
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
@@ -8,6 +24,7 @@ from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import Constraints, JointConstraint, RobotState, PositionConstraint, OrientationConstraint
 from moveit_msgs.msg import MotionPlanRequest, PlanningOptions, BoundingVolume, MoveItErrorCodes
 import moveit_msgs.msg
+from moveit_msgs.srv import GetPlanningScene
 from geometry_msgs.msg import TwistStamped, Twist, PointStamped, Quaternion
 from builtin_interfaces.msg import Duration
 from shape_msgs.msg import SolidPrimitive
@@ -47,6 +64,7 @@ class GripperMoveNode(Node):
 
         self.controller_client = self.make_client(SwitchController, '/controller_manager/switch_controller')
         self.start_servo_client = self.make_client(Trigger, '/servo_node/start_servo')
+        self.planning_scene_client = self.make_client(GetPlanningScene, '/get_planning_scene')
 
 
    
@@ -174,47 +192,50 @@ class GripperMoveNode(Node):
         #switch ros2 control controller to moveit
         self.switch_controller(servo=False)
 
-        #setup moveit goal
-        goal_msg = self.setup_params(goal_handle.request.relative_pose.pose)
-
         response = RelativeMove.Result()
+        for i in range(2):
+            #setup moveit goal
+            goal_msg = self.setup_params(goal_handle.request.relative_pose.pose) 
+        
+            #send goal and wait for return
+            send_goal_future = self.move_group_client.send_goal_async(goal_msg)
+            self.get_logger().info("sent goal")
+            rclpy.spin_until_future_complete(self, send_goal_future)
+            sent_goal_handle = send_goal_future.result()
 
-        #send goal and wait for return
-        send_goal_future = self.move_group_client.send_goal_async(goal_msg)
-        self.get_logger().info("sent goal")
-        rclpy.spin_until_future_complete(self, send_goal_future)
-        sent_goal_handle = send_goal_future.result()
+            #Check if goal was accepted and wait for result
+            if not sent_goal_handle.accepted:
+                self.get_logger().error('Goal was rejected!')
+                self.succeed = False
+                response.success = False
+                response.message = "Goal was rejected"
+                goal_handle.abort()
+                return response
 
-        #Check if goal was accepted and wait for result
-        if not sent_goal_handle.accepted:
-            self.get_logger().error('Goal was rejected!')
-            self.succeed = False
-            response.success = False
-            response.message = "Goal was rejected"
+            self.get_logger().info('Goal accepted! Waiting for result...')
+
+            # Wait for result
+            result_future = sent_goal_handle.get_result_async()
+            rclpy.spin_until_future_complete(self, result_future)
+            result_handle = result_future.result()
+
+            # Check result status
+            status = result_handle.status
+            if status == 4:  # STATUS_SUCCEEDED
+                self.get_logger().info('Motion execution succeeded!')
+                self.succeed = True
+                response.success = True
+                response.message = "Motion Executed Successfully"
+                break
+            else:
+                self.get_logger().error(f'Motion execution failed with status: {status}')
+                self.succeed = False
+                response.success = False
+                response.message = "Unable to Execute Motion"
+        if not self.succeed:
             goal_handle.abort()
-            return response
-
-        self.get_logger().info('Goal accepted! Waiting for result...')
-
-        # Wait for result
-        result_future = sent_goal_handle.get_result_async()
-        rclpy.spin_until_future_complete(self, result_future)
-        result_handle = result_future.result()
-
-        # Check result status
-        status = result_handle.status
-        if status == 4:  # STATUS_SUCCEEDED
-            self.get_logger().info('Motion execution succeeded!')
-            self.succeed = True
-            response.success = True
-            response.message = "Motion Executed Successfully"
+        else: 
             goal_handle.succeed()
-        else:
-            self.get_logger().error(f'Motion execution failed with status: {status}')
-            self.succeed = False
-            response.success = False
-            response.message = "Unable to Execute Motion"
-            goal_handle.abort()
 
         self.get_logger().info(f"Goal complete. Success = {self.succeed}")
 
@@ -287,6 +308,15 @@ class GripperMoveNode(Node):
         result.position.z = current.position.z + p_rel_rot[2]
 
         return result
+    
+    def get_current_robot_state(self) -> RobotState:
+        req = GetPlanningScene.Request()
+        # Empty request returns full scene including current robot state
+        future = self.planning_scene_client.call_async(req)
+        rclpy.spin_until_future_complete(self, future)
+
+        scene = future.result().scene
+        return scene.robot_state
 
     def create_motion_request(self):
         #create motion planning request
@@ -305,17 +335,22 @@ class GripperMoveNode(Node):
         # motion_request._pipeline_id = "pilz_industrial_motion_planner"
 
         # Set start state to the current state
-        motion_request.start_state = RobotState()
-        motion_request.start_state.joint_state.header = self.latest_joint_state.header
-        motion_request.start_state.joint_state.name = self.latest_joint_state.name
-        motion_request.start_state.joint_state.position = self.latest_joint_state.position
-        motion_request.start_state.joint_state.velocity = self.latest_joint_state.velocity
+        self.get_logger().info(f"latest joint state: {self.latest_joint_state.position}")
+        current_state = self.get_current_robot_state()
+        motion_request.start_state = current_state
+        
+
+        # motion_request.start_state = RobotState()
+        # motion_request.start_state.joint_state.header = self.latest_joint_state.header
+        # motion_request.start_state.joint_state.name = self.latest_joint_state.name
+        # motion_request.start_state.joint_state.position = self.latest_joint_state.position
+        # motion_request.start_state.joint_state.velocity = self.latest_joint_state.velocity
 
         #planning params
         #set planning params
         motion_request.max_velocity_scaling_factor = 0.5
         motion_request.max_acceleration_scaling_factor = 0.5
-        motion_request.allowed_planning_time = 5.0
+        motion_request.allowed_planning_time = 2.0
         motion_request.num_planning_attempts = 10
 
         #Initialize Constraints

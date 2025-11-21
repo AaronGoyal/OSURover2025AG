@@ -80,6 +80,14 @@ private:
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZRGB>); //Create the point cloud object
 		pcl::fromROSMsg(*msg, *pcl_cloud); //pass it and the msg by reference for conversion
 		
+		if (pcl_cloud->size() < 100) {
+			RCLCPP_WARN(
+				this->get_logger(),
+				"Point cloud has fewer than 100 points, skipping processing."
+			);
+		return;
+}
+
 		//Create output object:
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_cloud_table_removed(new pcl::PointCloud<pcl::PointXYZRGB>);
 
@@ -99,6 +107,7 @@ private:
         //Then fit it to the point cloud
         seg.setInputCloud(pcl_cloud);
         seg.segment(*inliers, *coefficients);
+		
 
         //Finally remove the inlier points from the larger point cloud (since we care about the stuff on/above the table.)
         //Using the extract_indices filter class:

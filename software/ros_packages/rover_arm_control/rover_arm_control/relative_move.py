@@ -251,7 +251,7 @@ class GripperMoveNode(Node):
         try:
             trans = self.tf_buffer.lookup_transform(
                 "base_link",  # target frame
-                "arm_gripper",  # source frame
+                self.target_frame,  # source frame
                 rclpy.time.Time())  # latest available
 
             self.current_pose = PoseStamped()

@@ -168,7 +168,7 @@ class GripperCanControl(Node):
                         self.set_mode(3)
                         self.send_position(self.home_pos)
                         self.sent_command = True
-                    if abs(self.measured_pos - self.home_pos) < 0.1:
+                    if abs(self.measured_pos - self.home_pos) < 1.0:
                         self.is_closed = False
                         self.action_complete = True
 

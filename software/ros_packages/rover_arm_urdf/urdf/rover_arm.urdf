@@ -148,6 +148,12 @@
   </link>
 
   <link name="jaws_link">
+    <visual> 
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.01"/>
+      </geometry>
+    </visual>
   </link>
 
 
@@ -211,7 +217,7 @@
   <joint name="gripper_jaws" type="fixed">
     <parent link = "arm_gripper"/>
     <child link = "jaws_link"/> 
-    <origin rpy="0 0 0" xyz="0 0 0.10"/>
+    <origin rpy="0 0 0" xyz="0 0 0.23"/>
   </joint>
 
 </robot>

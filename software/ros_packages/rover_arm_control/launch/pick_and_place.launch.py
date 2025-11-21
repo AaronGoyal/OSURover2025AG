@@ -81,6 +81,37 @@ def generate_launch_description():
         **config
     )
 
+    aruco_detector_node = Node(
+        package='rover_arm_control',
+        executable='aruco_detector',
+        name='aruco_detector',
+        **config
+    )
+
+    #Launch the pc_filter node
+    pc_filter_node = Node(
+			package = 'pc_processing',
+			executable = 'pc_filter',
+			name = 'pc_filter',
+			remappings = [
+				#('/raw_point_cloud', '/astra_ros/devices/default/point_cloud') #Remap for old HW rosbag
+				('/raw_point_cloud','/camera/d405/depth/color/points') #Remap for rover d405 pointcloud
+			]
+    )
+    #Launch the plane fitting node
+    pc_plane_node = Node(
+			package = 'pc_processing',
+			executable = 'plane_fit',
+			name = 'plane_fit',
+    )
+    #Launch the object clustering node
+    pc_count_object_node = Node(
+			package = 'pc_processing',
+			executable = 'count_objects',
+			name = 'count_objects'
+    )
+
+
 
     return LaunchDescription([
         ros2_control_hardware_type,
@@ -91,5 +122,9 @@ def generate_launch_description():
         relative_move_node,
         absolute_move_node,
         #pick_and_place_node,
+        aruco_detector_node,
+        # pc_filter_node,
+        # pc_plane_node,
+        # pc_count_object_node,
 
     ])

@@ -32,6 +32,7 @@ setup(
             'relative_move = rover_arm_control.relative_move:main',
             'absolute_move = rover_arm_control.absolute_move:main',
             'gripper_control = rover_arm_control.gripper_control:main',
+            'aruco_detector = rover_arm_control.aruco_detector:main',
         ],
     },
 )

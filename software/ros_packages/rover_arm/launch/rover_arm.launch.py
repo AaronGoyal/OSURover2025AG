@@ -66,7 +66,7 @@ def generate_launch_description():
     }
 
     octomap_sensor_config = load_yaml('rover_arm', 'config/sensors_3d.yaml')
-
+    
     #ros2_control_hardware_type = LaunchConfiguration(ros2_control_hardware_type)
     moveit_config = (
         MoveItConfigsBuilder("rover_arm", package_name="rover_arm")
@@ -80,7 +80,7 @@ def generate_launch_description():
         )
         .robot_description_semantic(file_path="config/rover_arm.srdf")
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
-        .sensors_3d(file_path="config/sensors_3d.yaml")
+        # .sensors_3d(file_path="config/sensors_3d.yaml")
         .planning_pipelines(
             pipelines=["ompl", "pilz_industrial_motion_planner", "chomp_interface"],
             load_all=False
@@ -123,9 +123,8 @@ def generate_launch_description():
             moveit_config.to_dict(),
             planner_plugins,
             planner_configs,
-            moveit_config.to_dict(),
-            octomap_config,
-            octomap_sensor_config
+            # octomap_config,
+            # octomap_sensor_config,            
         ],
         arguments=["--ros-args", "--log-level", "info"],
     )

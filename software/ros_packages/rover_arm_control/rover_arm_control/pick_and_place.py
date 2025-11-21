@@ -17,7 +17,8 @@ from rclpy.executors import MultiThreadedExecutor
 from geometry_msgs.msg import TwistStamped, Twist, PoseStamped
 from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
 from rcl_interfaces.srv import SetParameters
-from sensor_msgs.msg import JointState, Joy
+from sensor_msgs.msg import JointState, Joy, PointCloud2
+from sensor_msgs_py import point_cloud2
 from std_srvs.srv import Trigger, Empty
 from controller_manager_msgs.srv import SwitchController
 
@@ -30,6 +31,7 @@ from moveit_msgs.msg import MotionPlanRequest, PlanningOptions
 
 #custom action call
 from rover_arm_control_interface.action import RelativeMove, GripperControl
+from pc_processing.srv import ResetObjects
 
 
 
@@ -72,6 +74,7 @@ class SquareMakingController(Node):
         self.configure_servo_cli = self.make_client(SetParameters, '/servo_node/set_parameters')
         self.start_servo_client = self.make_client(Trigger, '/servo_node/start_servo')
         self.configure_servo_cli = self.make_client(SetParameters, '/servo_node/set_parameters')
+        self.start_object_cli = self.make_client(ResetObjects, '/reset_pc_processing')
 
         #Publishers
         self.publisher_ = self.create_publisher(TwistStamped, '/servo_node/delta_twist_cmds', 1)
@@ -83,6 +86,13 @@ class SquareMakingController(Node):
             'joint_states',
             self.joint_states_callback,
             10)
+        
+        self.objects_sub = self.create_subscription(
+            PointCloud2,
+            "/obj_centroids",
+            self.objects_callback,
+            10
+        )
 
         #timers
         self.timer = self.create_timer(0.03, self.timer_callback)
@@ -104,9 +114,10 @@ class SquareMakingController(Node):
 
         self.sq_keys = ["down", "right", "up", "left"]
         self.scan_iter = 0
+        #Square sides [m]
         self.square_dict = {
-            "down" : self.make_posestamped([0.0, -0.25, 0.0, 0.0, 0.0, 0.0, 0.0]),
-            "up" : self.make_posestamped([0.0, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            "down" : self.make_posestamped([0.0, -0.15, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            "up" : self.make_posestamped([0.0, 0.15, 0.0, 0.0, 0.0, 0.0, 0.0]),
             "right" : self.make_posestamped([0.75, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
             "left" : self.make_posestamped([-0.75 ,0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         }
@@ -117,7 +128,9 @@ class SquareMakingController(Node):
                   'elbow_roll_joint', 'wrist_pitch_joint', 'wrist_roll_joint']
         
         #Visual segmentation params
-        self.object_pose = PoseStamped()
+        self.object_pose = self.make_posestamped([0.0, 0.650, 0.304, 0.001, 1.000, 0.008, -0.005])
+        self.object_list = [self.make_posestamped([0.0, 0.650, 0.304, 0.001, 1.000, 0.008, -0.005])]
+
 
     def make_client(self, srv_type, name):
         """ Create a client to a service.
@@ -197,6 +210,40 @@ class SquareMakingController(Node):
         rclpy.spin_until_future_complete(self, self.future) 
         return self.future.result()
     
+    def reset_count_object(self, enable=True, reset=True):
+        """Service call to reset the object detection node.
+
+        Parameters
+        ----------
+        enable : Bool
+            Indicator to enable or disable object detection.
+        reset : Bool
+            Indicator to reset the detected objects.
+        
+        Returns
+        -------
+        future.result : Service Response
+            The response from the service call.
+        """
+        self.request = ResetObjects.Request()
+        self.request.enable = enable
+        self.request.reset = True
+        self.future = self.start_object_cli.call_async(self.request)
+
+        return self.future.result()
+    
+    def objects_callback(self, msg):
+        """Callback for object centroids.
+        """
+        object_data = point_cloud2.read_points_list(msg, field_names=("x", "y", "z"), skip_nans=True)
+        self.get_logger().info(f"Points {object_data}.")
+        if object_data == []:
+            return
+        self.object_list = []
+        for point in object_data:
+            # self.get_logger().info(f"Point {type(point.x)}.")
+            self.object_list.append(self.make_posestamped([float(point.x), float(point.y), float(point.z) + 0.335, 0.0, -1.0, 0.0, 0.0]))
+
 
     def move_to_joint_positions(self, joint_pose):
         """"Move arm to a set of joint angles.
@@ -352,6 +399,7 @@ class SquareMakingController(Node):
         pose.pose.orientation.z = pose_arr[5]
         pose.pose.orientation.w = pose_arr[6]  # Neutral orientation
         return pose
+
     
     def get_EE_pose(self):
         # Get the current pose of the gripper
@@ -374,9 +422,6 @@ class SquareMakingController(Node):
             self.get_logger().error(f"Failed to lookup gripper pose: {str(e)}")
         return current_pose
 
-
-
-
     def timer_callback(self): 
         #step 1 move to scan position
         if self.state == "start":
@@ -398,11 +443,13 @@ class SquareMakingController(Node):
                 self.move_to_joint_positions(start_scan_pose)
             elif self.move_success:
                 self.get_logger().info("goto scan")
+                self.reset_count_object(enable=True, reset=True)
                 self.state = "scan"
                 # pose = self.get_EE_pose()
                 # self.get_logger().info(f"EE Pose: position=({pose.pose.position.x:.3f}, {pose.pose.position.y:.3f}, {pose.pose.position.z:.3f}), "
                 #                     f"orientation=({pose.pose.orientation.x:.3f}, {pose.pose.orientation.y:.3f}, "
                 #                     f"{pose.pose.orientation.z:.3f}, {pose.pose.orientation.w:.3f})")
+                
                 self.sent_goal = False
 
         #step 2 scan workspace
@@ -440,6 +487,7 @@ class SquareMakingController(Node):
                     self.get_logger().info("goto user input")
                     self.scan_iter = 0
                     self.state = "move_to_input"
+                    self.reset_count_object(enable=False, reset=False)
 
         #step 3 move to get user input position
         if self.state == "move_to_input":
@@ -453,17 +501,17 @@ class SquareMakingController(Node):
                 self.state = "get_pick_input"
                 self.sent_goal = False
 
-
         #step 4 get pick input
         if self.state == "get_pick_input":
             self.get_logger().info("goto object")
-            self.state = "move_to_pick_mobility"
+            self.object_pose = self.object_list[0]
+            self.state = "move_to_object"
 
         #step 4.5 move to movement position
         if self.state == "move_to_pick_mobility":
             input_pos =  [0.0, -0.34, -1.98968, 0.0, 0.785398, 0.0]# stow [0.17453, 1.22173, -2.61799, 0.0, -0.17453, 0.0]# Ground pick up: [0.0, -0.698132, -1.65806, 0.0, -0.785698, 0.0]
             if not self.sent_goal:
-                time.sleep(0.5)
+                time.sleep(1.0)
                 self.switch_controller(servo=False)
                 self.move_to_joint_positions(input_pos)
             if self.move_success:
@@ -471,14 +519,15 @@ class SquareMakingController(Node):
                 self.state = "move_to_object"
                 self.sent_goal = False
 
-
         #step 5 move to above object
         if self.state == "move_to_object":
             if not self.sent_goal:
-                time.sleep(0.500)
-                self.object_pose = self.make_posestamped([0.0, 0.650, 0.304, 0.001, 1.000, 0.008, -0.005])
+                time.sleep(1.00)
+                # self.object_pose = self.make_posestamped([0.0, 0.650, 0.304, 0.001, 1.000, 0.008, -0.005])
                 self.move_to_absolute_pose(self.object_pose)
             elif self.move_success:
+                current_pose = self.get_EE_pose()
+                self.get_logger().info(f"Current EE Pose {current_pose.pose}, Commanded Pose {self.object_pose.pose}")
                 self.get_logger().info("goto approach")
                 self.sent_goal = False
                 time.sleep(0.25)
@@ -521,7 +570,7 @@ class SquareMakingController(Node):
         #step 8 get place input
         if self.state == "get_placd_input":
             self.get_logger().info("goto place location")
-            self.state = "move_to_place_mobility"
+            self.state = "move_above_place_location"
         
         #step 8.5 move to place mobility
         if self.state == "move_to_place_mobility":
@@ -542,6 +591,8 @@ class SquareMakingController(Node):
                 self.object_pose = self.make_posestamped([0.0, 0.650, 0.304, 0.001, 1.000, 0.008, -0.005])
                 self.move_to_absolute_pose(self.object_pose)
             elif self.move_success:
+                current_pose = self.get_EE_pose()
+                self.get_logger().info(f"Current EE Pose {current_pose.pose}, Commanded Pose {self.object_pose.pose}")
                 self.get_logger().info("goto place")
                 self.sent_goal = False
                 time.sleep(0.25)
@@ -579,7 +630,7 @@ class SquareMakingController(Node):
                 self.move_to_joint_positions(input_pos)
             if self.move_success:
                 self.get_logger().info("Done")
-                self.state = "start"
+                self.state = "home"
                 self.sent_goal = False
 
         #step 12 Return to Home sometimes
@@ -616,7 +667,6 @@ class SquareMakingController(Node):
 
         return twist
 
-
 def main(args=None):
     rclpy.init(args=args)
 
@@ -635,7 +685,6 @@ def main(args=None):
     # when the garbage collector destroys the node object)
     pick_and_place.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

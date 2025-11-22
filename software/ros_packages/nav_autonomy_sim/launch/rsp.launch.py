@@ -9,6 +9,11 @@ from launch_ros.actions import Node
 
 import xacro
 
+###################################
+# This file launches a robot state publisher to publish tfs
+# Don't need
+# On the rover this is handled by the rover_arm (it should probably be separate)
+###################################
 
 def generate_launch_description():
 

@@ -7,6 +7,12 @@ from launch_ros.actions import Node
 from launch.event_handlers import OnProcessStart
 from launch.substitutions import LaunchConfiguration, Command
 
+##########################
+# This file controls the robots movement based on the commands from nav2 stack
+# Usage: Sim only (for now)
+# Rover currently has another control method, but maybe this is better
+##########################
+
 def generate_launch_description():
 
     package_name='nav_autonomy_sim'

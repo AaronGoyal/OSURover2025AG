@@ -21,6 +21,12 @@
 #   Teleop:
 #     $ ros2 run turtlebot3_teleop teleop_keyboard
 
+
+###############################
+# This file launches the rtab and nav launch files for a sim demo
+# Don't need
+###############################
+
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription

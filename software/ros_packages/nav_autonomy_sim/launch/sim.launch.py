@@ -8,6 +8,13 @@ from launch.event_handlers import OnProcessExit
 from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition, UnlessCondition
 
+
+####################
+# This file launches the current sim setup
+# Usage: Sim only
+# Can reference for rover integration
+####################
+
 def generate_launch_description():
 
     ros2_control = LaunchConfiguration('ros2_control', default='true') 

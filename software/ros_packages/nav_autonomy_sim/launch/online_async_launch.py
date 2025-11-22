@@ -7,6 +7,12 @@ from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
 
+############################
+# This file launches slam_toolbox
+# Usage: Sim only
+############################
+
+
 def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     slam_params_file = LaunchConfiguration('slam_params_file')

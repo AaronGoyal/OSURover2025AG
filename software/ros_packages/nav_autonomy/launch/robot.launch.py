@@ -8,19 +8,13 @@ from launch.event_handlers import OnProcessExit
 from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition, UnlessCondition
 
-##########################
-# This file controls the robots movement based on the commands from nav2 stack
-# Usage: Sim only (for now)
-# Rover currently has another control method, but maybe this is better
-##########################
-
 def generate_launch_description():
 
     #ros2_control = LaunchConfiguration('ros2_control', default='true') 
     use_sim_time = LaunchConfiguration('use_sim_time', default='false') 
     viz = LaunchConfiguration('rtab_viz', default='true')
 
-    package_name='nav_autonomy_nav2'
+    package_name='nav_autonomy'
     pkg_share = get_package_share_directory(package_name)
 
     twist_mux_params = os.path.join(pkg_share, 'config', 'twist_mux.yaml')
@@ -31,7 +25,7 @@ def generate_launch_description():
         'map_frame_id': "world",
         'subscribe_odom_info':True,
         'subscribe_depth': True,
-        'subscribe_rgbd': True,
+        # 'subscribe_rgbd': True,
         'use_action_for_goal': True,
         'approx_sync': False,
         'Reg/Force3DoF': 'true',
@@ -160,8 +154,8 @@ def generate_launch_description():
     
                                      'map_frame': 'map',
                                      'odom_frame': 'odom',
-                                     'base_link_frame': 'base_link',
                                      'world_frame': 'odom', 
+                                     'base_link_frame': 'base_link',
     
                                      # Local odometry 
                                      'odom0': '/odom',
@@ -195,6 +189,7 @@ def generate_launch_description():
         launch_arguments={
             'use_sim_time': use_sim_time,
             'autostart': 'true',
+            'use_robot_state_pub': 'false',
             'params_file': nav2_params
         }.items()
     )

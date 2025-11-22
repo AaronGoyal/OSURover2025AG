@@ -40,6 +40,7 @@ def generate_launch_description():
         'Grid/3D':"false",                 # We do not want octomap. Saves memory and time 
         'Grid/CellSize':".05",
         'Grid/MaxGroundAngle':"60",
+        'Grid/RayTracing': 'true',         # Fill empty space
         # 'Grid/MaxGroundHeight':".1",
         # 'Grid/MapFrameProjection':"true",
 
@@ -57,10 +58,7 @@ def generate_launch_description():
             # Some general params for loop closure thresholds
         "Rtabmap/LoopGPS":'true',
 
-
         # Internal parameters (must be strings)
-        'Grid/3D':"false",                 # We do not want octomap. Saves memory and time
-        'Grid/RayTracing': 'true',         # Fill empty space
 
     # /Reg and /Vis
         # Configure point cloud registration (first step in sticking frames together)

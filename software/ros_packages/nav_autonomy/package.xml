@@ -14,7 +14,7 @@
   <depend>rtabmap_ros</depend>
   <depend>nav2_bringup</depend>
   <!-- <depend>robot_localization</depend> -->
-  <!-- <depend>twist_mux</depend> -->
+  <depend>twist_mux</depend>
 
   <exec_depend>ros2launch</exec_depend>
 

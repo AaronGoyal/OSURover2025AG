@@ -1,12 +1,11 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, RegisterEventHandler, DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
-from launch.event_handlers import OnProcessExit
 from launch.substitutions import LaunchConfiguration
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 
 def generate_launch_description():
 
@@ -18,7 +17,8 @@ def generate_launch_description():
     pkg_share = get_package_share_directory(package_name)
 
     twist_mux_params = os.path.join(pkg_share, 'config', 'twist_mux.yaml')
-    nav2_params = os.path.join(pkg_share, 'config', 'rgbd_nav2_params.yaml')
+    nav2_params = os.path.join(pkg_share, 'config', 'nav2_params.yaml')
+
     rtabmap_params = {
         'use_sim_time': use_sim_time,
         'frame_id':'base_link',

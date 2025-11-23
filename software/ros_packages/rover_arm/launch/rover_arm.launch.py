@@ -59,8 +59,14 @@ def generate_launch_description():
         'respawn': True
     }
 
-    
+    octomap_config = {
+        'octomap_frame': 'base_link',
+        'octomap_resolution': 0.05,
+        'max_range': 5.0
+    }
 
+    octomap_sensor_config = load_yaml('rover_arm', 'config/sensors_3d.yaml')
+    
     #ros2_control_hardware_type = LaunchConfiguration(ros2_control_hardware_type)
     moveit_config = (
         MoveItConfigsBuilder("rover_arm", package_name="rover_arm")
@@ -74,7 +80,7 @@ def generate_launch_description():
         )
         .robot_description_semantic(file_path="config/rover_arm.srdf")
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
-        .sensors_3d(file_path="config/sensors_3d.yaml")
+        # .sensors_3d(file_path="config/sensors_3d.yaml")
         .planning_pipelines(
             pipelines=["ompl", "pilz_industrial_motion_planner", "chomp_interface"],
             load_all=False
@@ -117,9 +123,8 @@ def generate_launch_description():
             moveit_config.to_dict(),
             planner_plugins,
             planner_configs,
-            octomap_config,
-            octomap_updater_config,
-            planning_scene_monitor_parameters,
+            # octomap_config,
+            # octomap_sensor_config,            
         ],
         arguments=["--ros-args", "--log-level", "info"],
     )
@@ -210,7 +215,7 @@ def generate_launch_description():
                 package="tf2_ros",
                 plugin="tf2_ros::StaticTransformBroadcasterNode",
                 name="static_tf2_broadcaster",
-                parameters=[{"child_frame_id": "/base_link", "frame_id": "/world"}],
+                parameters=[{"child_frame_id": "/rover_base_origin", "frame_id": "/world"}],
             ),
             ComposableNode(
                 package="robot_state_publisher",
@@ -243,6 +248,7 @@ def generate_launch_description():
             #sensor_yaml,
             # octomap_config,
             # octomap_updater_config,
+            kinematics_yaml,
         ],
         output="screen",
     )
@@ -273,7 +279,7 @@ def generate_launch_description():
             "align_depth.enable": True,
             #"enable_rgbd": True,
             "decimation_filter": True,
-            "decimation_filter.filter_magnitude": 4.0,
+            "decimation_filter.filter_magnitude": 4,
             "enable_sync": True,
             "pointcloud.stream_filter": 2,
             # "enable_color": True,

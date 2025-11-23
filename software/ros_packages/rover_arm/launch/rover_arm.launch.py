@@ -217,7 +217,7 @@ def generate_launch_description():
                 package="tf2_ros",
                 plugin="tf2_ros::StaticTransformBroadcasterNode",
                 name="static_tf2_broadcaster",
-                parameters=[{"child_frame_id": "/base_link", "frame_id": "/world"}],
+                parameters=[{"child_frame_id": "/rover_base_origin", "frame_id": "/world"}],
             ),
             ComposableNode(
                 package="robot_state_publisher",

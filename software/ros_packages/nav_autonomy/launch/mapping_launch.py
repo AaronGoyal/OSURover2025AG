@@ -23,7 +23,7 @@ def generate_launch_description():
         # "use_sim_time": True,
 
         # Frames
-        'frame_id':'base_link',           
+        'frame_id':'rover_base_origin',   # base link frame     
         'odom_frame_id': "odom",        # set this to get odom from the tf instead of a topic sub
         'map_frame_id': "map",          # set tf head to "world" instead of "map" to avoid tf conflicts
         

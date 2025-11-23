@@ -57,7 +57,7 @@ def generate_launch_description():
                 
                 'map_frame': 'map',
                 'odom_frame': 'odom',
-                'base_link_frame': 'base_link',
+                'base_link_frame': 'rover_base_origin',
                 'world_frame': 'odom', 
                 
                 # Local odometry 
@@ -136,7 +136,7 @@ def generate_launch_description():
         # Frame IDs
         'map_frame_id': 'map',
         'odom_frame_id': 'odom',
-        'base_link_frame_id': 'base_link',
+        'base_link_frame_id': 'rover_base_origin',
         'world_frame_id': 'odom',  # Match the EKFs
     }],
     remappings=[

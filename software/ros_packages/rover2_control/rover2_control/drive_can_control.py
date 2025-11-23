@@ -3,6 +3,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 from geometry_msgs.msg import Twist
 from rover2_control_interface.msg import DriveCommandMessage
+from geometry_msgs.msg import Twist
 from time import time, sleep
 import math
 import can
@@ -42,8 +43,8 @@ class DriveCanControlNode(Node):
         #Groundstation Subscription
         #TODO: Just make these the Default Twist Message types?? :skull:
         self.groundstation_sub = self.create_subscription(
-            DriveCommandMessage,
-            '/command_control/ground_station_drive',  # Topic where twist messages are published
+            Twist,
+            '/cmd_vel',  # Topic where twist messages are published
             self.groundstation_drive_command_callback,
             10
         )
@@ -106,13 +107,12 @@ class DriveCanControlNode(Node):
     def groundstation_drive_command_callback(self, msg):
         # Map joystick axes to wheel velocities
         # Assume left stick y-axis for forward/backward and right stick x-axis for turning
-        self.get_logger().info(f"Recieved: Lin Vel: {msg.drive_twist.linear.x}, ang vel: {msg.drive_twist.angular.z}")
-        if msg.controller_present:
-            #Update the desired velocities
-            self.linear_velocity = msg.drive_twist.linear.x  # Left joystick vertical axis (forward/backward)
-            self.angular_velocity = msg.drive_twist.angular.z  # Right joystick horizontal axis (turning)         self.send_drive_commands() 
+        #Update the desired velocities
+        self.linear_velocity = msg.linear.x  # Left joystick vertical axis (forward/backward)
+        self.angular_velocity = msg.angular.z  # Right joystick horizontal axis (turning)         
+        self.send_drive_commands() 
             
-            self.last_message_time = time() #Only update the watchdog timer if we recieve a message and a controller is present
+        self.last_message_time = time() #Only update the watchdog timer if we recieve a message and a controller is present
 
 
     #Callback Function for Drive commands from Iris, which recieves commands over SBUS from Taranis   

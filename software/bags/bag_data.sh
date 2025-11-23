@@ -6,7 +6,12 @@ fi
 
 ros2 bag record \
   -s mcap -o ~/Rover_2023_2024/software/bags/$1 \
-  /rover_odom \
-  /camera/camera/color/image_raw \
-  /camera/camera/color/camera_info \
-  /camera/camera/aligned_depth_to_color/image_raw \
+  /tf_static \
+  /odometry/global \
+  /odom \
+  /imu/data \
+  /gps/fix \
+  /camera/d455/color/image_raw \
+  /camera/d455/color/camera_info \
+  /camera/d455/aligned_depth_to_color/image_raw \
+  /tf

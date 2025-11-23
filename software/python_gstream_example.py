@@ -7,7 +7,7 @@ Gst.init(sys.argv)
 
 # Optimized: Keep everything on GPU (NVMM memory)
 pipeline = Gst.parse_launch(
-    'v4l2src do-timestamp=true device=/dev/rover/camera_infrared ! '
+    'v4l2src do-timestamp=true device=/dev/rover/gripper-rgb ! '
     'image/jpeg,width=1920,height=1080,framerate=30/1 ! nvv4l2decoder mjpeg=1  ! nvvidconv ! video/x-raw ! tee name=t '
     't. ! queue  ! appsink name=infrared_sink '
     't. ! queue ! videoscale ! video/x-raw,width=640,height=480,format=I420 ! '

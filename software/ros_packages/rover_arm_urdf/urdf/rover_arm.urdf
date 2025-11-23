@@ -4,28 +4,28 @@
   <!--DEFINING ROBOT LINKS IN ORDER FROM BASE TO HAND-->
   <link name="base_link">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 -1.5708" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://rover_arm_urdf/urdf/dae_files/base_link.dae"/>
       </geometry>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 -1.5708" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://rover_arm_urdf/urdf/stl_files/base_link.stl"/>
       </geometry>
     </collision>
   </link>
 
-  <link name="rover_body">
+  <link name="rover_base_origin">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 1.5708" xyz="0.26035 0 0"/>
       <geometry>
         <mesh filename="package://rover_arm_urdf/urdf/stl_files/rover_body.stl" scale="0.001 0.001 0.001"/>
       </geometry>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 1.5708" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://rover_arm_urdf/urdf/stl_files/rover_body.stl" scale="0.001 0.001 0.001"/>
       </geometry>
@@ -147,20 +147,31 @@
     </inertial>
   </link>
 
+  <link name="jaws_link">
+    <visual> 
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.01"/>
+      </geometry>
+    </visual>
+  </link>
+
 
 
   <joint name="base_joint" type="revolute">
     <parent link="base_link"/>
     <child link="arm_link_0"/>
-    <origin rpy="0 0 0" xyz="0 0.055 0.087245"/>
+    <origin rpy="0 0 -1.5708" xyz="0.055 0 0.087245"/>
     <axis xyz="0 0 -1"/>
     <limit effort="1000.0" lower="-1.57079632679" upper="1.57079632679" velocity="6.0"/>
   </joint>
 
   <joint name="rover_body_joint" type="fixed">
-    <parent link="base_link"/>
-    <child link="rover_body"/>
-    <origin rpy="0 0 3.1415926" xyz="0 0.084615 -0.03175"/>
+    <parent link="rover_base_origin"/>
+    <child link="base_link"/>
+    <!-- xyz = -0.084615+0.26035, 0, 0.03175 -->
+    <origin rpy="0 0 0" xyz="0.175735 0 0.03175"/>
+
   </joint>
 
   <joint name="shoulder_joint" type="revolute">
@@ -203,6 +214,12 @@
     <origin rpy="0 0 0" xyz="-0.050 0 0.050484"/>
     <axis xyz="0 0 1"/>
     <limit effort="1000.0" velocity="60.0"/>
+  </joint>
+
+  <joint name="gripper_jaws" type="fixed">
+    <parent link = "arm_gripper"/>
+    <child link = "jaws_link"/> 
+    <origin rpy="0 0 0" xyz="0 0 0.23"/>
   </joint>
 
 </robot>

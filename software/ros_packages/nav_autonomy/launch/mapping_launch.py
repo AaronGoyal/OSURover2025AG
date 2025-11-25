@@ -49,14 +49,14 @@ def generate_launch_description():
         # 'Grid/NoiseFilteringMinNeighbors':"5",
 
     # /Optimzer
-        "Optimizer/PriorsIgnored":'false',  # Fuse GPS as a prior
+#        "Optimizer/PriorsIgnored":'false',  # Fuse GPS as a prior
             # Note from the docs: "Currently only g2o and gtsam optimization supports this."
             # It is ambiguous whether this is refering to supporting priors or supporting ignoring priors
             # By default the optimization method is neither of these, should be TORO (double check this)
 
     # /Rtabmap
             # Some general params for loop closure thresholds
-        "Rtabmap/LoopGPS":'true',
+ #       "Rtabmap/LoopGPS":'true',
 
         # Internal parameters (must be strings)
 
@@ -67,8 +67,8 @@ def generate_launch_description():
         # Configure loop closure and graph optimization for RGBD
 
 # Reduce computation?
-        'Grid/DepthDecimation':"8",         # 4 by default
-        'Grid/NormalK':"10",                # 20 by default
+  #      'Grid/DepthDecimation':"8",         # 4 by default
+  #      'Grid/NormalK':"10",                # 20 by default
         
 
         }]        

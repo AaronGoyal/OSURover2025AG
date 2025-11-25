@@ -62,10 +62,10 @@ def generate_launch_description():
                 
                 # Local odometry 
                 'odom0': '/wheel_odom',
-                'odom0_config': [False, False, False,       # Only use linear and angular velocity (in robot frame)
-                                False, False, False,
-                                True,  False,  False,
+                'odom0_config': [True, True, False,
                                 False, False, True,
+                                True,  False,  False,
+                                False, False, False,
                                 False, False, False],
                 'odom0_queue_size': 10,
                 'odom0_differential': False,

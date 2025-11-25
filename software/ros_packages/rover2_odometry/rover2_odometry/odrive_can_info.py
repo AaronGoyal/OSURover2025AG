@@ -74,8 +74,6 @@ class OdriveCanInfo(Node):
                 for node_id in self.left_motor_ids:
                     if msg.arbitration_id == (node_id << 5 | 0x09):
                         pos_estimate, vel_estimate = struct.unpack('<ff', bytes(msg.data))
-			### SUPER GIGA SCUFFED CONVERSION CHAGNE LATER FOR THE LOVE OF GOD (GOD HAS ABANDONED ME) ###
-			### THIS POSITIONAL DATA IS VELO DATA (GIGA CURSED) ###
                         self.left_positions[node_id] = self.round_value(pos_estimate, 3) * -1 #Position is negative since base is flipped
                         
                         # Publish averaged left position

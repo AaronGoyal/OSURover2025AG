@@ -39,6 +39,31 @@ def generate_launch_description():
             name='odrive_can_info',
             **config
         ),
+
+        # Launch visual odom
+        # Node(
+        #     package='rtabmap_odom', 
+        #     executable='rgbd_odometry', 
+        #     output='screen',
+        #     parameters=[{
+        #         # Frames
+        #         'frame_id':'rover_base_origin',
+        #         'odom_frame_id': "odom",
+
+        #         # config params
+        #         'publish_tf':False, 
+        #         'approx_sync':False,
+
+        #         # Internal Params (must be strings)
+        #         'Odom/Strategy':'1',        # 0 = Frame to map , 1 = Frame to Frame
+        #     }],
+        #     remappings=[
+        #         ('rgb/image', '/camera/d455/color/image_raw'),
+        #         ('rgb/camera_info', '/camera/d455/color/camera_info'),
+        #         ('depth/image', '/camera/d455/aligned_depth_to_color/image_raw'),
+        #         ('odom', '/odometry/visual'),
+        #     ]),
+
         # Global EKF (fuses local EKF and GPS - also publishes odom->base_link)
         Node(
             package='robot_localization',
@@ -70,17 +95,28 @@ def generate_launch_description():
                 'odom0_queue_size': 10,
                 'odom0_differential': False,
                 'odom0_relative': False,
+
+                # Visual odometry
+                # 'odom1': '/odometry/visual',
+                # 'odom1_config': [True,  True,  False,   # x, y position
+                #                 False, False, True,     # yaw orientation
+                #                 False, False, False,
+                #                 False, False, False,
+                #                 False, False, False],
+                # 'odom1_queue_size': 10,
+                # 'odom1_differential': False,
+                # 'odom1_relative': False,
                 
                 # GPS odometry (from navsat_transform)
-#                'odom1': '/odometry/gps',
-#                'odom1_config': [True,  True,  False,  # Use GPS x, y position
+#                'odom2': '/odometry/gps',
+#                'odom2_config': [True,  True,  False,  # Use GPS x, y position
 #                                False, False, False,
 #                                False, False, False,
 #                                False, False, False,
 #                                False, False, False],
-#                'odom1_queue_size': 10,
-#                'odom1_differential': False,
-#                'odom1_relative': False,
+#                'odom2_queue_size': 10,
+#                'odom2_differential': False,
+#                'odom2_relative': False,
                 
                 # IMU (same as local)
                 'imu0': '/imu/data',

@@ -43,12 +43,12 @@ def generate_launch_description():
     #         )]), launch_arguments={'use_sim_time': 'true'}.items()
     # )
    
-    twist_mux = Node(
-            package='twist_mux',
-            executable='twist_mux',
-            parameters=[twist_mux_params, {'use_sim_time': use_sim_time}],
-            remappings=[('/cmd_vel', '/command_control/ground_station_drive')]
-    )
+    # twist_mux = Node(
+    #         package='twist_mux',
+    #         executable='twist_mux',
+    #         parameters=[twist_mux_params, {'use_sim_time': use_sim_time}],
+    #         remappings=[('/cmd_vel', '/command_control/ground_station_drive')]
+    # )
 
     
     nav2 = IncludeLaunchDescription(

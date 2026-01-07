@@ -8,11 +8,17 @@ from launch.event_handlers import OnProcessExit
 from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition, UnlessCondition
 
+
+####################
+# This file launches the current sim setup
+# Usage: Sim only
+# Can reference for rover integration
+####################
+
 def generate_launch_description():
 
     ros2_control = LaunchConfiguration('ros2_control', default='true') 
     use_sim_time = LaunchConfiguration('use_sim_time', default='true') 
-    localization = LaunchConfiguration('localization', default='false')
 
     package_name='nav_autonomy_sim'
     pkg_share = get_package_share_directory(package_name)
@@ -164,6 +170,52 @@ def generate_launch_description():
             remappings=[('/cmd_vel_out', '/diff_drive_controller/cmd_vel_unstamped')]
     )
 
+    localization = Node(
+                         package='robot_localization',
+                         executable='ekf_node',
+                         name='ekf_global',
+                         output='screen',
+                         parameters=[{
+                                     'frequency': 50.0,
+                                     'sensor_timeout': 0.1,
+                                     'two_d_mode': True,
+                                     'transform_time_offset': 0.0,
+                                     'transform_timeout': 0.0,
+                                     'print_diagnostics': True,
+                                     'debug': False,
+                                     'publish_tf': True,
+    
+                                     'map_frame': 'map',
+                                     'odom_frame': 'odom',
+                                     'base_link_frame': 'base_link',
+                                     'world_frame': 'odom', 
+    
+                                     # Local odometry 
+                                     'odom0': '/odom',
+                                     'odom0_config': [False, False, False,
+                                                      False, False, False,
+                                                      True,  True,  False,
+                                                      False, False, True,
+                                                      False, False, False],
+                                     'odom0_queue_size': 10,
+                                     'odom0_differential': False,
+                                     'odom0_relative': False,
+    
+                                     # IMU (same as local)
+                                     'imu0': '/imu',
+                                     'imu0_config': [False, False, False,
+                                                     False, False, True,
+                                                     False, False, False,
+                                                     False, False, True,
+                                                     True,  True,  False],
+                                     'imu0_queue_size': 10,
+                                     'imu0_differential': False,
+                                     'imu0_relative': False,
+                                     'imu0_remove_gravitational_acceleration': True,
+                         }],
+                         remappings=[('/odometry/filtered', '/odometry/global')]
+     )
+    
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             os.path.join(get_package_share_directory('nav2_bringup'),'launch','navigation_launch.py')]),
@@ -185,6 +237,7 @@ def generate_launch_description():
         event_handler=OnProcessExit(
             target_action=spawn_entity,
             on_exit=[
+                # localization,
                 rtabmap_slam,
                 rtabmnap_odom, 
                 rtabmap_point_cloud,
@@ -197,7 +250,6 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true', description='Use simulation (Gazebo) clock if true'),
         DeclareLaunchArgument('ros2_control', default_value='true', description='Use ros2_control'),
-        DeclareLaunchArgument('localization', default_value='false', description='Launch rtabmap in localization mode.'),
 
         rsp,
         twist_mux,

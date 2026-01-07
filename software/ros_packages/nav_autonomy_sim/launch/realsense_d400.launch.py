@@ -13,6 +13,11 @@ from launch_ros.actions import Node, SetParameter
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
+###########################
+# This file launches the realsense and rtab_map for the sim
+# Don't need
+###########################
+
 def generate_launch_description():
     parameters=[{
           'frame_id':'camera_link',

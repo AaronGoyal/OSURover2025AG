@@ -6,6 +6,11 @@ from launch.actions import DeclareLaunchArgument
 import os
 from ament_index_python.packages import get_package_share_directory
 
+#################
+# This file launches joy controls for the sim
+# Usage: Sim only
+#################
+
 def generate_launch_description():
 
     pkg_name = 'nav_autonomy_sim'

@@ -12,6 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+##############################
+# This file launches the nav2 autonomy stack
+# Usage: Rover and sim
+##############################
+
 import os
 
 from ament_index_python.packages import get_package_share_directory

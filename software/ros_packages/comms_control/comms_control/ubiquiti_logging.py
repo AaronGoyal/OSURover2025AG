@@ -25,7 +25,7 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 ####################################################################################
 USERNAME = 'rover'
 PASSWORD = 'makemorerobot'
-ip = '192.168.1.20'
+ip = '192.168.1.25'
 login_url = 'https://{0}/login.cgi'
 
 #List of URLs we can request from on the Ubiquiti Rocket
@@ -287,12 +287,12 @@ def login():
 ####################################################################################
 def main(args=None):
     try:
-        with rclpy.init(args=args):
-            ubiquiti_logger = UbiquitiLogger()
+        rclpy.init(args=args)
+        ubiquiti_logger = UbiquitiLogger()
 
-            rclpy.spin(ubiquiti_logger)
+        rclpy.spin(ubiquiti_logger)
 
-            rclpy.shutdown()
+        rclpy.shutdown()
     except (KeyboardInterrupt, ExternalShutdownException):
         rclpy.shutdown()
         pass

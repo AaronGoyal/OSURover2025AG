@@ -12,8 +12,8 @@ class OdrivePositionOdometry(Node):
         super().__init__('odrive_position_odometry')
         
         # ===== CONFIGURE THESE FOR YOUR ROVER =====
-        self.declare_parameter('wheel_radius', 0.075)    # meters
-        self.declare_parameter('track_width', 0.5)       # meters
+        self.declare_parameter('wheel_radius', 0.150)    # meters
+        self.declare_parameter('track_width', 0.815)       # meters
         
         self.wheel_radius = self.get_parameter('wheel_radius').value
         self.track_width = self.get_parameter('track_width').value
@@ -136,7 +136,7 @@ class OdrivePositionOdometry(Node):
         odom = Odometry()
         odom.header.stamp = current_time.to_msg()
         odom.header.frame_id = 'odom'
-        odom.child_frame_id = 'base_link'
+        odom.child_frame_id = 'robot_base_origin'
         
         # Position
         odom.pose.pose.position.x = self.x
@@ -161,7 +161,7 @@ class OdrivePositionOdometry(Node):
         odom.pose.covariance[14] = 1e6    # z (not used)
         odom.pose.covariance[21] = 1e6    # roll (not used)
         odom.pose.covariance[28] = 1e6    # pitch (not used)
-        odom.pose.covariance[35] = 0.01   # yaw variance
+        odom.pose.covariance[35] = 0.1   # yaw variance
         
         # Velocity covariance
         odom.twist.covariance[0] = 0.001   # vx variance

@@ -39,7 +39,7 @@ def generate_launch_description():
    nav_autonomy = IncludeLaunchDescription(
       PythonLaunchDescriptionSource([os.path.join(
          get_package_share_directory('nav_autonomy'),
-         'launch'), '/nav_autonomy.py'])
+         'launch'), '/nav_launch.py'])
       )
    return LaunchDescription([
       drive_control,

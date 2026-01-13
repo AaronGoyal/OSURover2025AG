@@ -105,12 +105,12 @@ def generate_launch_description():
             name='chassis_pan_tilt',
             **config
         ),
-        Node(
-            package='rover2_control',
-            executable='monitor_aruco',
-            name='monitor_aruco',
-            **config
-        ),
+#        Node(
+#            package='rover2_control',
+#            executable='monitor_aruco',
+#            name='monitor_aruco',
+#            **config
+#        ),
         Node(
             package='rover2_control',
             executable='tower_pan_tilt_control',
@@ -124,5 +124,5 @@ def generate_launch_description():
             **config
         ),
         gripper_can_control_node,
-        auton_controller
+#        auton_controller
     ])

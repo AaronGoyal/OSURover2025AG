@@ -205,7 +205,7 @@ class IMUNode(Node):
                 imu_msg.angular_velocity_covariance[0] = -1
             
             # Linear acceleration in m/s²
-            accel = self.imu.acceleration
+            accel = self.imu.linear_acceleration  # Gravity already removed
             if accel and None not in accel:
                 imu_msg.linear_acceleration.x = float(accel[0])
                 imu_msg.linear_acceleration.y = float(accel[1])

@@ -17,62 +17,16 @@ import os
         # odom -> base_link
         # base_link -> ... -> <camera_name>_color_optical_frame
 
-# KRJ TODO: convert this to a rtab param config file instead
 def generate_launch_description():
-    parameters=[{
-        # "use_sim_time": True,
+    package_name='nav_autonomy'
+    pkg_share = get_package_share_directory(package_name)
 
-        # Frames
-        'frame_id':'rover_base_origin',   # base link frame     
-        'odom_frame_id': "odom",        # set this to get odom from the tf instead of a topic sub
-        'map_frame_id': "map",          # set tf head to "world" instead of "map" to avoid tf conflicts
-        
-        #  Rtab params
-        'subscribe_depth':True,
-        'subscribe_rgb':True,
-        'subscribe_odom_info':False,
-        'approx_sync':False,              # Set to false because images are all from single camera, so will be synced
-        'publish_tf':True,
-
-# Internal parameters (must be strings)
-    # /Grid
-        # Configure generation of obstacle map
-        'Grid/3D':"false",                 # We do not want octomap. Saves memory and time 
-        'Grid/CellSize':".05",
-        'Grid/MaxGroundAngle':"60",
-        'Grid/RayTracing': 'true',         # Fill empty space
-        # 'Grid/MaxGroundHeight':".1",
-        # 'Grid/MapFrameProjection':"true",
-
-        # filtering
-        # 'Grid/NoiseFilteringRadius':".05",
-        # 'Grid/NoiseFilteringMinNeighbors':"5",
-
-    # /Optimzer
-        "Optimizer/PriorsIgnored":'false',  # Fuse GPS as a prior
-            # Note from the docs: "Currently only g2o and gtsam optimization supports this."
-            # It is ambiguous whether this is refering to supporting priors or supporting ignoring priors
-            # By default the optimization method is neither of these, should be TORO (double check this)
-
-    # /Rtabmap
-            # Some general params for loop closure thresholds
-        "Rtabmap/LoopGPS":'true',
-
-        # Internal parameters (must be strings)
-
-    # /Reg and /Vis
-        # Configure point cloud registration (first step in sticking frames together)
-        
-    # /RGBD
-        # Configure loop closure and graph optimization for RGBD
-
-        }]        
+    parameters = [os.path.join(pkg_share, 'config', 'rtab_params.yaml')]
 
     remappings=[
         ('rgb/image', '/camera/d455/color/image_raw'),
         ('rgb/camera_info', '/camera/d455/color/camera_info'),
         ('depth/image', '/camera/d455/aligned_depth_to_color/image_raw'),
-        # ('odom', '/odometry/global'),
         ]
         
     config_rviz = os.path.join(
